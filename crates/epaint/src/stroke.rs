@@ -1,6 +1,6 @@
 #![allow(clippy::derived_hash_with_manual_eq)] // We need to impl Hash for f32, but we don't implement Eq, which is fine
 
-use std::{fmt::Debug, sync::Arc};
+use alloc::{fmt::Debug, rc::Rc};
 
 use super::*;
 
@@ -46,9 +46,9 @@ where
     }
 }
 
-impl std::hash::Hash for Stroke {
+impl core::hash::Hash for Stroke {
     #[inline(always)]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let Self { width, color } = *self;
         emath::OrderedFloat(width).hash(state);
         color.hash(state);
@@ -90,7 +90,7 @@ impl PathStroke {
     ) -> Self {
         Self {
             width: width.into(),
-            color: ColorMode::UV(Arc::new(callback)),
+            color: ColorMode::UV(Rc::new(callback)),
         }
     }
 

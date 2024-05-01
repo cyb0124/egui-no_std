@@ -1,3 +1,5 @@
+use alloc::{vec, vec::Vec};
+
 use crate::*;
 use emath::*;
 
@@ -77,15 +79,13 @@ impl Mesh {
     }
 
     pub fn bytes_used(&self) -> usize {
-        std::mem::size_of::<Self>()
-            + self.vertices.len() * std::mem::size_of::<Vertex>()
-            + self.indices.len() * std::mem::size_of::<u32>()
+        core::mem::size_of::<Self>()
+            + self.vertices.len() * core::mem::size_of::<Vertex>()
+            + self.indices.len() * core::mem::size_of::<u32>()
     }
 
     /// Are all indices within the bounds of the contained vertices?
     pub fn is_valid(&self) -> bool {
-        crate::profile_function!();
-
         if let Ok(n) = u32::try_from(self.vertices.len()) {
             self.indices.iter().all(|&i| i < n)
         } else {
@@ -108,7 +108,6 @@ impl Mesh {
 
     /// Append all the indices and vertices of `other` to `self`.
     pub fn append(&mut self, other: Self) {
-        crate::profile_function!();
         crate::epaint_assert!(other.is_valid());
 
         if self.is_empty() {
@@ -214,7 +213,7 @@ impl Mesh {
     pub fn split_to_u16(self) -> Vec<Mesh16> {
         crate::epaint_assert!(self.is_valid());
 
-        const MAX_SIZE: u32 = std::u16::MAX as u32;
+        const MAX_SIZE: u32 = core::u16::MAX as u32;
 
         if self.vertices.len() <= MAX_SIZE as usize {
             // Common-case optimization:

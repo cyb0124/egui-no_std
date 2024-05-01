@@ -1,6 +1,12 @@
 //! All the data egui returns to the backend at the end of each frame.
 
 use crate::{ViewportIdMap, ViewportOutput, WidgetType};
+use alloc::{
+    borrow::ToOwned,
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
 
 /// What egui emits each frame from [`crate::Context::run`].
 ///
@@ -53,10 +59,10 @@ impl FullOutput {
 
         for (id, new_viewport) in viewports {
             match self.viewport_output.entry(id) {
-                std::collections::hash_map::Entry::Vacant(entry) => {
+                hashbrown::hash_map::Entry::Vacant(entry) => {
                     entry.insert(new_viewport);
                 }
-                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                hashbrown::hash_map::Entry::Occupied(mut entry) => {
                     entry.get_mut().append(new_viewport);
                 }
             }
@@ -117,12 +123,6 @@ pub struct PlatformOutput {
     ///
     /// Useful for IME.
     pub ime: Option<IMEOutput>,
-
-    /// The difference in the widget tree since last frame.
-    ///
-    /// NOTE: this needs to be per-viewport.
-    #[cfg(feature = "accesskit")]
-    pub accesskit_update: Option<accesskit::TreeUpdate>,
 }
 
 impl PlatformOutput {
@@ -153,8 +153,6 @@ impl PlatformOutput {
             mut events,
             mutable_text_under_cursor,
             ime,
-            #[cfg(feature = "accesskit")]
-            accesskit_update,
         } = newer;
 
         self.cursor_icon = cursor_icon;
@@ -167,18 +165,11 @@ impl PlatformOutput {
         self.events.append(&mut events);
         self.mutable_text_under_cursor = mutable_text_under_cursor;
         self.ime = ime.or(self.ime);
-
-        #[cfg(feature = "accesskit")]
-        {
-            // egui produces a complete AccessKit tree for each frame,
-            // so overwrite rather than appending.
-            self.accesskit_update = accesskit_update;
-        }
     }
 
     /// Take everything ephemeral (everything except `cursor_icon` currently)
     pub fn take(&mut self) -> Self {
-        let taken = std::mem::take(self);
+        let taken = core::mem::take(self);
         self.cursor_icon = taken.cursor_icon; // everything else is ephemeral
         taken
     }
@@ -446,8 +437,8 @@ impl OutputEvent {
     }
 }
 
-impl std::fmt::Debug for OutputEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for OutputEvent {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             Self::Clicked(wi) => write!(f, "Clicked({wi:?})"),
             Self::DoubleClicked(wi) => write!(f, "DoubleClicked({wi:?})"),
@@ -485,11 +476,11 @@ pub struct WidgetInfo {
     pub value: Option<f64>,
 
     /// Selected range of characters in [`Self::current_text_value`].
-    pub text_selection: Option<std::ops::RangeInclusive<usize>>,
+    pub text_selection: Option<core::ops::RangeInclusive<usize>>,
 }
 
-impl std::fmt::Debug for WidgetInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for WidgetInfo {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         let Self {
             typ,
             enabled,
@@ -599,7 +590,7 @@ impl WidgetInfo {
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn text_selection_changed(
-        text_selection: std::ops::RangeInclusive<usize>,
+        text_selection: core::ops::RangeInclusive<usize>,
         current_text_value: impl ToString,
     ) -> Self {
         Self {

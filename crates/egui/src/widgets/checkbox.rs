@@ -1,4 +1,5 @@
 use crate::*;
+use alloc::vec;
 
 // TODO(emilk): allow checkbox without a text label
 /// Boolean on/off control with text label.

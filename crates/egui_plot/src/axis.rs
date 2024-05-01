@@ -1,12 +1,17 @@
-use std::{fmt::Debug, ops::RangeInclusive, sync::Arc};
-
+use super::{transform::PlotTransform, GridMark};
+use alloc::{
+    fmt::Debug,
+    format,
+    rc::Rc,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::ops::RangeInclusive;
 use egui::{
     emath::{remap_clamp, round_to_decimals, Rot2},
     epaint::TextShape,
     Pos2, Rangef, Rect, Response, Sense, TextStyle, Ui, Vec2, WidgetText,
 };
-
-use super::{transform::PlotTransform, GridMark};
 
 pub(super) type AxisFormatterFn = dyn Fn(GridMark, usize, &RangeInclusive<f64>) -> String;
 
@@ -100,7 +105,7 @@ impl From<Placement> for VPlacement {
 #[derive(Clone)]
 pub struct AxisHints {
     pub(super) label: WidgetText,
-    pub(super) formatter: Arc<AxisFormatterFn>,
+    pub(super) formatter: Rc<AxisFormatterFn>,
     pub(super) digits: usize,
     pub(super) placement: Placement,
     pub(super) label_spacing: Rangef,
@@ -128,7 +133,7 @@ impl AxisHints {
     pub fn new(axis: Axis) -> Self {
         Self {
             label: Default::default(),
-            formatter: Arc::new(Self::default_formatter),
+            formatter: Rc::new(Self::default_formatter),
             digits: 5,
             placement: Placement::LeftBottom,
             label_spacing: match axis {
@@ -147,7 +152,7 @@ impl AxisHints {
         mut self,
         fmt: impl Fn(GridMark, usize, &RangeInclusive<f64>) -> String + 'static,
     ) -> Self {
-        self.formatter = Arc::new(fmt);
+        self.formatter = Rc::new(fmt);
         self
     }
 
@@ -237,7 +242,7 @@ pub(super) struct AxisWidget {
     /// The region where we draw the axis labels.
     pub rect: Rect,
     pub transform: Option<PlotTransform>,
-    pub steps: Arc<Vec<GridMark>>,
+    pub steps: Rc<Vec<GridMark>>,
 }
 
 impl AxisWidget {
@@ -270,7 +275,7 @@ impl AxisWidget {
                 .unwrap_or_else(|| ui.visuals().text_color());
             let angle: f32 = match axis {
                 Axis::X => 0.0,
-                Axis::Y => -std::f32::consts::TAU * 0.25,
+                Axis::Y => -core::f32::consts::TAU * 0.25,
             };
             // select text_pos and angle depending on placement and orientation of widget
             let text_pos = match self.hints.placement {

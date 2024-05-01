@@ -1,5 +1,6 @@
 use crate::{textures::TextureOptions, Color32};
-use std::sync::Arc;
+use alloc::{rc::Rc, vec, vec::Vec};
+use num_traits::Float;
 
 /// An image stored in RAM.
 ///
@@ -12,7 +13,7 @@ use std::sync::Arc;
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ImageData {
     /// RGBA image.
-    Color(Arc<ColorImage>),
+    Color(Rc<ColorImage>),
 
     /// Used for the font texture.
     Font(FontImage),
@@ -214,7 +215,7 @@ impl ColorImage {
     }
 }
 
-impl std::ops::Index<(usize, usize)> for ColorImage {
+impl core::ops::Index<(usize, usize)> for ColorImage {
     type Output = Color32;
 
     #[inline]
@@ -225,7 +226,7 @@ impl std::ops::Index<(usize, usize)> for ColorImage {
     }
 }
 
-impl std::ops::IndexMut<(usize, usize)> for ColorImage {
+impl core::ops::IndexMut<(usize, usize)> for ColorImage {
     #[inline]
     fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut Color32 {
         let [w, h] = self.size;
@@ -237,19 +238,19 @@ impl std::ops::IndexMut<(usize, usize)> for ColorImage {
 impl From<ColorImage> for ImageData {
     #[inline(always)]
     fn from(image: ColorImage) -> Self {
-        Self::Color(Arc::new(image))
+        Self::Color(Rc::new(image))
     }
 }
 
-impl From<Arc<ColorImage>> for ImageData {
+impl From<Rc<ColorImage>> for ImageData {
     #[inline]
-    fn from(image: Arc<ColorImage>) -> Self {
+    fn from(image: Rc<ColorImage>) -> Self {
         Self::Color(image)
     }
 }
 
-impl std::fmt::Debug for ColorImage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for ColorImage {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         f.debug_struct("ColorImage")
             .field("size", &self.size)
             .field("pixel-count", &self.pixels.len())
@@ -328,7 +329,7 @@ impl FontImage {
     }
 }
 
-impl std::ops::Index<(usize, usize)> for FontImage {
+impl core::ops::Index<(usize, usize)> for FontImage {
     type Output = f32;
 
     #[inline]
@@ -339,7 +340,7 @@ impl std::ops::Index<(usize, usize)> for FontImage {
     }
 }
 
-impl std::ops::IndexMut<(usize, usize)> for FontImage {
+impl core::ops::IndexMut<(usize, usize)> for FontImage {
     #[inline]
     fn index_mut(&mut self, (x, y): (usize, usize)) -> &mut f32 {
         let [w, h] = self.size;

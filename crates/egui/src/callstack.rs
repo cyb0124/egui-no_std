@@ -1,3 +1,5 @@
+use alloc::{format, string::String, vec};
+
 #[derive(Clone)]
 struct Frame {
     /// `_main` is usually as the deepest depth.

@@ -3,6 +3,8 @@
 //! It is the foundation for windows and popups.
 
 use crate::*;
+use alloc::{vec, vec::Vec};
+use num_traits::Float;
 
 /// State that is persisted between frames.
 // TODO(emilk): this is not currently stored in `Memory::data`, but maybe it should be?

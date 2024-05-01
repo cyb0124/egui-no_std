@@ -20,17 +20,18 @@
 #![cfg_attr(feature = "document-features", doc = document_features::document_features!())]
 //!
 
+#![no_std]
 #![allow(clippy::float_cmp)]
 #![allow(clippy::manual_range_contains)]
-#![cfg_attr(feature = "puffin", deny(unsafe_code))]
-#![cfg_attr(not(feature = "puffin"), forbid(unsafe_code))]
+#![forbid(unsafe_code)]
+
+extern crate alloc;
 
 mod bezier;
 pub mod color;
 pub mod image;
 mod margin;
 mod mesh;
-pub mod mutex;
 mod shadow;
 mod shape;
 pub mod shape_transform;
@@ -69,9 +70,9 @@ pub use tessellator::tessellate_shapes;
 pub use ecolor::{Color32, Hsva, HsvaGamma, Rgba};
 pub use emath::{pos2, vec2, Pos2, Rect, Vec2};
 
-pub use ahash;
 pub use ecolor;
 pub use emath;
+pub use hashbrown;
 
 #[cfg(feature = "color-hex")]
 pub use ecolor::hex_color;
@@ -153,38 +154,3 @@ macro_rules! epaint_assert {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-
-/// Was epaint compiled with the `rayon` feature?
-pub const HAS_RAYON: bool = cfg!(feature = "rayon");
-
-// ---------------------------------------------------------------------------
-
-mod profiling_scopes {
-    #![allow(unused_macros)]
-    #![allow(unused_imports)]
-
-    /// Profiling macro for feature "puffin"
-    macro_rules! profile_function {
-        ($($arg: tt)*) => {
-            #[cfg(feature = "puffin")]
-            #[cfg(not(target_arch = "wasm32"))] // Disabled on web because of the coarse 1ms clock resolution there.
-            puffin::profile_function!($($arg)*);
-        };
-    }
-    pub(crate) use profile_function;
-
-    /// Profiling macro for feature "puffin"
-    macro_rules! profile_scope {
-        ($($arg: tt)*) => {
-            #[cfg(feature = "puffin")]
-            #[cfg(not(target_arch = "wasm32"))] // Disabled on web because of the coarse 1ms clock resolution there.
-            puffin::profile_scope!($($arg)*);
-        };
-    }
-    pub(crate) use profile_scope;
-}
-
-#[allow(unused_imports)]
-pub(crate) use profiling_scopes::*;

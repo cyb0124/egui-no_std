@@ -1,5 +1,8 @@
-use std::{borrow::Cow, ops::Range};
-
+use alloc::{
+    borrow::{Cow, ToOwned},
+    string::String,
+};
+use core::ops::Range;
 use epaint::{
     text::{
         cursor::{CCursor, PCursor},
@@ -224,7 +227,7 @@ impl TextBuffer for String {
     }
 
     fn take(&mut self) -> String {
-        std::mem::take(self)
+        core::mem::take(self)
     }
 }
 
@@ -254,7 +257,7 @@ impl<'a> TextBuffer for Cow<'a, str> {
     }
 
     fn take(&mut self) -> String {
-        std::mem::take(self).into_owned()
+        core::mem::take(self).into_owned()
     }
 }
 

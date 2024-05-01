@@ -1,6 +1,6 @@
-use crate::*;
-
 use self::text_selection::LabelSelectionState;
+use crate::*;
+use alloc::string::{String, ToString};
 
 /// Clickable text, that looks like a hyperlink.
 ///

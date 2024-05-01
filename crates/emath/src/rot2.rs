@@ -1,4 +1,5 @@
 use super::Vec2;
+use num_traits::Float;
 
 // {s,c} represents the rotation matrix:
 //
@@ -89,8 +90,8 @@ impl Rot2 {
     }
 }
 
-impl std::fmt::Debug for Rot2 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for Rot2 {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         write!(
             f,
             "Rot2 {{ angle: {:.1}°, length: {} }}",
@@ -100,7 +101,7 @@ impl std::fmt::Debug for Rot2 {
     }
 }
 
-impl std::ops::Mul<Self> for Rot2 {
+impl core::ops::Mul<Self> for Rot2 {
     type Output = Self;
 
     #[inline]
@@ -117,7 +118,7 @@ impl std::ops::Mul<Self> for Rot2 {
 }
 
 /// Rotates (and maybe scales) the vector.
-impl std::ops::Mul<Vec2> for Rot2 {
+impl core::ops::Mul<Vec2> for Rot2 {
     type Output = Vec2;
 
     #[inline]
@@ -130,7 +131,7 @@ impl std::ops::Mul<Vec2> for Rot2 {
 }
 
 /// Scales the rotor.
-impl std::ops::Mul<Rot2> for f32 {
+impl core::ops::Mul<Rot2> for f32 {
     type Output = Rot2;
 
     #[inline]
@@ -143,7 +144,7 @@ impl std::ops::Mul<Rot2> for f32 {
 }
 
 /// Scales the rotor.
-impl std::ops::Mul<f32> for Rot2 {
+impl core::ops::Mul<f32> for Rot2 {
     type Output = Self;
 
     #[inline]
@@ -156,7 +157,7 @@ impl std::ops::Mul<f32> for Rot2 {
 }
 
 /// Scales the rotor.
-impl std::ops::Div<f32> for Rot2 {
+impl core::ops::Div<f32> for Rot2 {
     type Output = Self;
 
     #[inline]
@@ -176,7 +177,7 @@ mod test {
     #[test]
     fn test_rotation2() {
         {
-            let angle = std::f32::consts::TAU / 6.0;
+            let angle = core::f32::consts::TAU / 6.0;
             let rot = Rot2::from_angle(angle);
             assert!((rot.angle() - angle).abs() < 1e-5);
             assert!((rot * rot.inverse()).angle().abs() < 1e-5);
@@ -184,14 +185,14 @@ mod test {
         }
 
         {
-            let angle = std::f32::consts::TAU / 4.0;
+            let angle = core::f32::consts::TAU / 4.0;
             let rot = Rot2::from_angle(angle);
             assert!(((rot * vec2(1.0, 0.0)) - vec2(0.0, 1.0)).length() < 1e-5);
         }
 
         {
             // Test rotation and scaling
-            let angle = std::f32::consts::TAU / 4.0;
+            let angle = core::f32::consts::TAU / 4.0;
             let rot = 3.0 * Rot2::from_angle(angle);
             let rotated = rot * vec2(1.0, 0.0);
             let expected = vec2(0.0, 3.0);

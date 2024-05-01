@@ -1,6 +1,8 @@
 #![allow(clippy::needless_range_loop)]
 
 use crate::*;
+use alloc::boxed::Box;
+use num_traits::Float;
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -283,7 +285,7 @@ impl ScrollArea {
 
     /// A source for the unique [`Id`], e.g. `.id_source("second_scroll_area")` or `.id_source(loop_index)`.
     #[inline]
-    pub fn id_source(mut self, id_source: impl std::hash::Hash) -> Self {
+    pub fn id_source(mut self, id_source: impl core::hash::Hash) -> Self {
         self.id_source = Some(Id::new(id_source));
         self
     }
@@ -701,7 +703,7 @@ impl ScrollArea {
         ui: &mut Ui,
         row_height_sans_spacing: f32,
         total_rows: usize,
-        add_contents: impl FnOnce(&mut Ui, std::ops::Range<usize>) -> R,
+        add_contents: impl FnOnce(&mut Ui, core::ops::Range<usize>) -> R,
     ) -> ScrollAreaOutput<R> {
         let spacing = ui.spacing().item_spacing;
         let row_height_with_spacing = row_height_sans_spacing + spacing.y;

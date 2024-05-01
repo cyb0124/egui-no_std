@@ -1,11 +1,11 @@
+use super::{
+    text_cursor_state::cursor_rect, visuals::paint_text_selection, CursorRange, TextCursorState,
+};
 use crate::{
     layers::ShapeIdx, text::CCursor, text_selection::CCursorRange, Context, CursorIcon, Event,
     Galley, Id, LayerId, Pos2, Rect, Response, Ui,
 };
-
-use super::{
-    text_cursor_state::cursor_rect, visuals::paint_text_selection, CursorRange, TextCursorState,
-};
+use alloc::{borrow::ToOwned, format, rc::Rc, string::String, vec::Vec};
 
 /// Turn on to help debug this
 const DEBUG: bool = false; // Don't merge `true`!
@@ -32,16 +32,6 @@ fn paint_selection(
             Some(painted_shape_idx),
         );
     }
-
-    #[cfg(feature = "accesskit")]
-    super::accesskit_text::update_accesskit_for_text_widget(
-        ui.ctx(),
-        _response.id,
-        cursor_range,
-        accesskit::Role::StaticText,
-        galley_pos,
-        galley,
-    );
 }
 
 /// One end of a text selection, inside any widget.
@@ -70,8 +60,8 @@ fn pos_in_galley(galley_pos: Pos2, galley: &Galley, ccursor: CCursor) -> Pos2 {
     galley_pos + galley.pos_from_ccursor(ccursor).center().to_vec2()
 }
 
-impl std::fmt::Debug for WidgetTextCursor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for WidgetTextCursor {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         f.debug_struct("WidgetTextCursor")
             .field("widget_id", &self.widget_id.short_debug_format())
             .field("ccursor", &self.ccursor.index)
@@ -146,11 +136,8 @@ impl Default for LabelSelectionState {
 
 impl LabelSelectionState {
     pub(crate) fn register(ctx: &Context) {
-        ctx.on_begin_frame(
-            "LabelSelectionState",
-            std::sync::Arc::new(Self::begin_frame),
-        );
-        ctx.on_end_frame("LabelSelectionState", std::sync::Arc::new(Self::end_frame));
+        ctx.on_begin_frame("LabelSelectionState", Rc::new(Self::begin_frame));
+        ctx.on_end_frame("LabelSelectionState", Rc::new(Self::end_frame));
     }
 
     pub fn load(ctx: &Context) -> Self {
@@ -223,7 +210,7 @@ impl LabelSelectionState {
             state.is_dragging = false;
         }
 
-        let text_to_copy = std::mem::take(&mut state.text_to_copy);
+        let text_to_copy = core::mem::take(&mut state.text_to_copy);
         if !text_to_copy.is_empty() {
             ctx.copy_text(text_to_copy);
         }

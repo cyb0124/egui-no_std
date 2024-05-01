@@ -1,8 +1,14 @@
 #![allow(clippy::needless_pass_by_value)] // False positives with `impl ToString`
 
-use std::{cmp::Ordering, ops::RangeInclusive};
-
 use crate::*;
+use alloc::{
+    borrow::ToOwned,
+    boxed::Box,
+    format,
+    string::{String, ToString},
+};
+use core::{cmp::Ordering, ops::RangeInclusive};
+use num_traits::Float;
 
 // ----------------------------------------------------------------------------
 
@@ -417,27 +423,8 @@ impl<'a> Widget for DragValue<'a> {
                     - input.count_and_consume_key(Modifiers::NONE, Key::ArrowDown) as f64;
             }
 
-            #[cfg(feature = "accesskit")]
-            {
-                use accesskit::Action;
-                change += input.num_accesskit_action_requests(id, Action::Increment) as f64
-                    - input.num_accesskit_action_requests(id, Action::Decrement) as f64;
-            }
-
             change
         });
-
-        #[cfg(feature = "accesskit")]
-        {
-            use accesskit::{Action, ActionData};
-            ui.input(|input| {
-                for request in input.accesskit_action_requests(id, Action::SetValue) {
-                    if let Some(ActionData::NumericValue(new_value)) = request.data {
-                        value = new_value;
-                    }
-                }
-            });
-        }
 
         if change != 0.0 {
             value += speed * change;
@@ -479,8 +466,6 @@ impl<'a> Widget for DragValue<'a> {
             }
         }
 
-        // some clones below are redundant if AccessKit is disabled
-        #[allow(clippy::redundant_clone)]
         let mut response = if is_kb_editing {
             let mut value_text = ui
                 .data_mut(|data| data.remove_temp::<String>(id))
@@ -596,53 +581,6 @@ impl<'a> Widget for DragValue<'a> {
 
         response.widget_info(|| WidgetInfo::drag_value(value));
 
-        #[cfg(feature = "accesskit")]
-        ui.ctx().accesskit_node_builder(response.id, |builder| {
-            use accesskit::Action;
-            // If either end of the range is unbounded, it's better
-            // to leave the corresponding AccessKit field set to None,
-            // to allow for platform-specific default behavior.
-            if clamp_range.start().is_finite() {
-                builder.set_min_numeric_value(*clamp_range.start());
-            }
-            if clamp_range.end().is_finite() {
-                builder.set_max_numeric_value(*clamp_range.end());
-            }
-            builder.set_numeric_value_step(speed);
-            builder.add_action(Action::SetValue);
-            if value < *clamp_range.end() {
-                builder.add_action(Action::Increment);
-            }
-            if value > *clamp_range.start() {
-                builder.add_action(Action::Decrement);
-            }
-            // The name field is set to the current value by the button,
-            // but we don't want it set that way on this widget type.
-            builder.clear_name();
-            // Always expose the value as a string. This makes the widget
-            // more stable to accessibility users as it switches
-            // between edit and button modes. This is particularly important
-            // for VoiceOver on macOS; if the value is not exposed as a string
-            // when the widget is in button mode, then VoiceOver speaks
-            // the value (or a percentage if the widget has a clamp range)
-            // when the widget loses focus, overriding the announcement
-            // of the newly focused widget. This is certainly a VoiceOver bug,
-            // but it's good to make our software work as well as possible
-            // with existing assistive technology. However, if the widget
-            // has a prefix and/or suffix, expose those when in button mode,
-            // just as they're exposed on the screen. This triggers the
-            // VoiceOver bug just described, but exposing all information
-            // is more important, and at least we can avoid the bug
-            // for instances of the widget with no prefix or suffix.
-            //
-            // The value is exposed as a string by the text edit widget
-            // when in edit mode.
-            if !is_kb_editing {
-                let value_text = format!("{prefix}{value_text}{suffix}");
-                builder.set_value(value_text);
-            }
-        });
-
         response
     }
 }
@@ -670,7 +608,7 @@ mod tests {
     macro_rules! total_assert_eq {
         ($a:expr, $b:expr) => {
             assert!(
-                matches!($a.total_cmp(&$b), std::cmp::Ordering::Equal),
+                matches!($a.total_cmp(&$b), core::cmp::Ordering::Equal),
                 "{} != {}",
                 $a,
                 $b

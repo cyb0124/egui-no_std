@@ -1,9 +1,9 @@
+use super::{Orientation, PlotPoint};
+use crate::transform::{PlotBounds, PlotTransform};
+use alloc::string::String;
+use alloc::{vec, vec::Vec};
 use egui::emath::NumExt as _;
 use egui::epaint::{Color32, Rgba, Stroke};
-
-use crate::transform::{PlotBounds, PlotTransform};
-
-use super::{Orientation, PlotPoint};
 
 /// Trait that abstracts from rectangular 'Value'-like elements, such as bars or boxes
 pub(super) trait RectElement {

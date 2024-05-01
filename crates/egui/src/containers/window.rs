@@ -1,12 +1,12 @@
 // WARNING: the code in here is horrible. It is a behemoth that needs breaking up into simpler parts.
-
-use std::sync::Arc;
-
+use super::*;
 use crate::collapsing_header::CollapsingState;
 use crate::*;
+use alloc::boxed::Box;
+use alloc::rc::Rc;
+use alloc::vec::Vec;
 use epaint::*;
-
-use super::*;
+use num_traits::Float;
 
 /// Builder for a floating window which can be dragged, closed, collapsed, resized and scrolled (off by default).
 ///
@@ -698,7 +698,7 @@ impl SideResponse {
     }
 }
 
-impl std::ops::BitOrAssign for SideResponse {
+impl core::ops::BitOrAssign for SideResponse {
     fn bitor_assign(&mut self, rhs: Self) {
         *self = Self {
             hover: self.hover || rhs.hover,
@@ -993,7 +993,7 @@ struct TitleBar {
     id: Id,
 
     /// Prepared text in the title
-    title_galley: Arc<Galley>,
+    title_galley: Rc<Galley>,
 
     /// Size of the title bar in a collapsed state (if window is collapsible),
     /// which includes all necessary space for showing the expand button, the

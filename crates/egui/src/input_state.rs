@@ -1,10 +1,13 @@
 mod touch_state;
 
 use crate::data::input::*;
-use crate::{emath::*, util::History};
-use std::collections::{BTreeMap, HashSet};
-
+use crate::emath::*;
 pub use crate::Key;
+use alloc::collections::BTreeMap;
+use alloc::vec::Vec;
+use alloc::{format, vec};
+use hashbrown::HashSet;
+use num_traits::Float;
 pub use touch_state::MultiTouchInfo;
 use touch_state::TouchState;
 
@@ -178,8 +181,6 @@ impl InputState {
         requested_immediate_repaint_prev_frame: bool,
         pixels_per_point: f32,
     ) -> Self {
-        crate::profile_function!();
-
         let time = new.time.unwrap_or(self.time + new.predicted_dt as f64);
         let unstable_dt = (time - self.time) as f32;
 
@@ -509,33 +510,6 @@ impl InputState {
         }
     }
 
-    #[cfg(feature = "accesskit")]
-    pub fn accesskit_action_requests(
-        &self,
-        id: crate::Id,
-        action: accesskit::Action,
-    ) -> impl Iterator<Item = &accesskit::ActionRequest> {
-        let accesskit_id = id.accesskit_id();
-        self.events.iter().filter_map(move |event| {
-            if let Event::AccessKitActionRequest(request) = event {
-                if request.target == accesskit_id && request.action == action {
-                    return Some(request);
-                }
-            }
-            None
-        })
-    }
-
-    #[cfg(feature = "accesskit")]
-    pub fn has_accesskit_action_request(&self, id: crate::Id, action: accesskit::Action) -> bool {
-        self.accesskit_action_requests(id, action).next().is_some()
-    }
-
-    #[cfg(feature = "accesskit")]
-    pub fn num_accesskit_action_requests(&self, id: crate::Id, action: accesskit::Action) -> usize {
-        self.accesskit_action_requests(id, action).count()
-    }
-
     /// Get all events that matches the given filter.
     pub fn filtered_events(&self, filter: &EventFilter) -> Vec<Event> {
         self.events
@@ -694,9 +668,9 @@ impl Default for PointerState {
             press_start_time: None,
             has_moved_too_much_for_a_click: false,
             started_decidedly_dragging: false,
-            last_click_time: std::f64::NEG_INFINITY,
-            last_last_click_time: std::f64::NEG_INFINITY,
-            last_move_time: std::f64::NEG_INFINITY,
+            last_click_time: core::f64::NEG_INFINITY,
+            last_last_click_time: core::f64::NEG_INFINITY,
+            last_move_time: core::f64::NEG_INFINITY,
             pointer_events: vec![],
         }
     }

@@ -1,3 +1,4 @@
+use alloc::{vec, vec::Vec};
 use egui::Rangef;
 
 /// Size hint for table column/strip cell.

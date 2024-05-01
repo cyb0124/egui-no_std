@@ -7,13 +7,6 @@ pub(crate) struct TooltipFrameState {
     pub count: usize,
 }
 
-#[cfg(feature = "accesskit")]
-#[derive(Clone)]
-pub(crate) struct AccessKitFrameState {
-    pub(crate) node_builders: IdMap<accesskit::NodeBuilder>,
-    pub(crate) parent_stack: Vec<Id>,
-}
-
 /// State that is collected during a frame and then cleared.
 /// Short-term (single frame) memory.
 #[derive(Clone)]
@@ -41,9 +34,6 @@ pub(crate) struct FrameState {
     /// horizontal, vertical
     pub(crate) scroll_target: [Option<(Rangef, Option<Align>)>; 2],
 
-    #[cfg(feature = "accesskit")]
-    pub(crate) accesskit_state: Option<AccessKitFrameState>,
-
     /// Highlight these widgets this next frame. Read from this.
     pub(crate) highlight_this_frame: IdSet,
 
@@ -63,8 +53,6 @@ impl Default for FrameState {
             used_by_panels: Rect::NAN,
             tooltip_state: None,
             scroll_target: [None, None],
-            #[cfg(feature = "accesskit")]
-            accesskit_state: None,
             highlight_this_frame: Default::default(),
             highlight_next_frame: Default::default(),
 
@@ -76,7 +64,6 @@ impl Default for FrameState {
 
 impl FrameState {
     pub(crate) fn begin_frame(&mut self, screen_rect: Rect) {
-        crate::profile_function!();
         let Self {
             used_ids,
             available_rect,
@@ -84,8 +71,6 @@ impl FrameState {
             used_by_panels,
             tooltip_state,
             scroll_target,
-            #[cfg(feature = "accesskit")]
-            accesskit_state,
             highlight_this_frame,
             highlight_next_frame,
 
@@ -105,12 +90,7 @@ impl FrameState {
             *has_debug_viewed_this_frame = false;
         }
 
-        #[cfg(feature = "accesskit")]
-        {
-            *accesskit_state = None;
-        }
-
-        *highlight_this_frame = std::mem::take(highlight_next_frame);
+        *highlight_this_frame = core::mem::take(highlight_next_frame);
     }
 
     /// How much space is still available after panels has been added.

@@ -1,5 +1,6 @@
 //! Showing UI:s for egui/epaint types.
 use crate::*;
+use alloc::{format, string::ToString};
 
 pub fn font_family_ui(ui: &mut Ui, font_family: &mut FontFamily) {
     let families = ui.fonts(|f| f.families());
@@ -146,7 +147,6 @@ impl Widget for &mut epaint::TessellationOptions {
                 debug_ignore_clip_rects,
                 bezier_tolerance,
                 epsilon: _,
-                parallel_tessellation,
                 validate_meshes,
             } = self;
 
@@ -169,10 +169,6 @@ impl Widget for &mut epaint::TessellationOptions {
                         .speed(speed)
                 );
             });
-
-            ui.add_enabled(epaint::HAS_RAYON, crate::Checkbox::new(parallel_tessellation, "Parallelize tessellation")
-                ).on_hover_text("Only available if epaint was compiled with the rayon feature")
-                .on_disabled_hover_text("epaint was not compiled with the rayon feature");
 
             ui.checkbox(validate_meshes, "Validate meshes").on_hover_text("Check that incoming meshes are valid, i.e. that all indices are in range, etc.");
 

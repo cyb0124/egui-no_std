@@ -6,6 +6,9 @@
 #![cfg_attr(feature = "document-features", doc = document_features::document_features!())]
 //!
 
+#![no_std]
+extern crate alloc;
+
 mod axis;
 mod items;
 mod legend;
@@ -13,12 +16,12 @@ mod memory;
 mod plot_ui;
 mod transform;
 
-use std::{cmp::Ordering, ops::RangeInclusive, sync::Arc};
-
-use egui::ahash::HashMap;
+use alloc::{boxed::Box, format, rc::Rc, string::String, vec, vec::Vec};
+use core::{cmp::Ordering, ops::RangeInclusive};
 use egui::*;
 use emath::Float as _;
 use epaint::Hsva;
+use hashbrown::HashMap;
 
 pub use crate::{
     axis::{Axis, AxisHints, HPlacement, Placement, VPlacement},
@@ -189,7 +192,7 @@ pub struct Plot {
 
 impl Plot {
     /// Give a unique id for each plot within the same [`Ui`].
-    pub fn new(id_source: impl std::hash::Hash) -> Self {
+    pub fn new(id_source: impl core::hash::Hash) -> Self {
         Self {
             id_source: Id::new(id_source),
             id: None,
@@ -665,7 +668,7 @@ impl Plot {
         fmt: impl Fn(GridMark, usize, &RangeInclusive<f64>) -> String + 'static,
     ) -> Self {
         if let Some(main) = self.x_axes.first_mut() {
-            main.formatter = Arc::new(fmt);
+            main.formatter = Rc::new(fmt);
         }
         self
     }
@@ -681,7 +684,7 @@ impl Plot {
         fmt: impl Fn(GridMark, usize, &RangeInclusive<f64>) -> String + 'static,
     ) -> Self {
         if let Some(main) = self.y_axes.first_mut() {
-            main.formatter = Arc::new(fmt);
+            main.formatter = Rc::new(fmt);
         }
         self
     }
@@ -1121,7 +1124,7 @@ impl Plot {
         // Add legend widgets to plot
         let bounds = mem.transform.bounds();
         let x_axis_range = bounds.range_x();
-        let x_steps = Arc::new({
+        let x_steps = Rc::new({
             let input = GridInput {
                 bounds: (bounds.min[0], bounds.max[0]),
                 base_step_size: mem.transform.dvalue_dpos()[0].abs() * grid_spacing.min as f64,
@@ -1129,7 +1132,7 @@ impl Plot {
             (grid_spacers[0])(input)
         });
         let y_axis_range = bounds.range_y();
-        let y_steps = Arc::new({
+        let y_steps = Rc::new({
             let input = GridInput {
                 bounds: (bounds.min[1], bounds.max[1]),
                 base_step_size: mem.transform.dvalue_dpos()[1].abs() * grid_spacing.min as f64,

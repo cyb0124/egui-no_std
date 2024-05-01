@@ -5,9 +5,11 @@
 //! If it is still used next frame, it is not recomputed.
 //! If it is not used next frame, it is evicted from the cache to save memory.
 
+use alloc::boxed::Box;
+
 /// Something that does an expensive computation that we want to cache
 /// to save us from recomputing it each frame.
-pub trait ComputerMut<Key, Value>: 'static + Send + Sync {
+pub trait ComputerMut<Key, Value>: 'static {
     fn compute(&mut self, key: Key) -> Value;
 }
 
@@ -17,7 +19,7 @@ pub trait ComputerMut<Key, Value>: 'static + Send + Sync {
 pub struct FrameCache<Value, Computer> {
     generation: u32,
     computer: Computer,
-    cache: nohash_hasher::IntMap<u64, (u32, Value)>,
+    cache: hashbrown::HashMap<u64, (u32, Value), nohash_hasher::BuildNoHashHasher<u64>>,
 }
 
 impl<Value, Computer> Default for FrameCache<Value, Computer>
@@ -53,19 +55,19 @@ impl<Value, Computer> FrameCache<Value, Computer> {
     /// or recompute and store in the cache.
     pub fn get<Key>(&mut self, key: Key) -> Value
     where
-        Key: Copy + std::hash::Hash,
+        Key: Copy + core::hash::Hash,
         Value: Clone,
         Computer: ComputerMut<Key, Value>,
     {
         let hash = crate::util::hash(key);
 
         match self.cache.entry(hash) {
-            std::collections::hash_map::Entry::Occupied(entry) => {
+            hashbrown::hash_map::Entry::Occupied(entry) => {
                 let cached = entry.into_mut();
                 cached.0 = self.generation;
                 cached.1.clone()
             }
-            std::collections::hash_map::Entry::Vacant(entry) => {
+            hashbrown::hash_map::Entry::Vacant(entry) => {
                 let value = self.computer.compute(key);
                 entry.insert((self.generation, value.clone()));
                 value
@@ -75,19 +77,17 @@ impl<Value, Computer> FrameCache<Value, Computer> {
 }
 
 #[allow(clippy::len_without_is_empty)]
-pub trait CacheTrait: 'static + Send + Sync {
+pub trait CacheTrait: 'static {
     /// Call once per frame to evict cache.
     fn update(&mut self);
 
     /// Number of values currently in the cache.
     fn len(&self) -> usize;
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any;
 }
 
-impl<Value: 'static + Send + Sync, Computer: 'static + Send + Sync> CacheTrait
-    for FrameCache<Value, Computer>
-{
+impl<Value: 'static, Computer: 'static> CacheTrait for FrameCache<Value, Computer> {
     fn update(&mut self) {
         self.evice_cache();
     }
@@ -96,7 +96,7 @@ impl<Value: 'static + Send + Sync, Computer: 'static + Send + Sync> CacheTrait
         self.cache.len()
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
         self
     }
 }
@@ -119,13 +119,13 @@ impl<Value: 'static + Send + Sync, Computer: 'static + Send + Sync> CacheTrait
 /// ```
 #[derive(Default)]
 pub struct CacheStorage {
-    caches: ahash::HashMap<std::any::TypeId, Box<dyn CacheTrait>>,
+    caches: hashbrown::HashMap<core::any::TypeId, Box<dyn CacheTrait>>,
 }
 
 impl CacheStorage {
     pub fn cache<FrameCache: CacheTrait + Default>(&mut self) -> &mut FrameCache {
         self.caches
-            .entry(std::any::TypeId::of::<FrameCache>())
+            .entry(core::any::TypeId::of::<FrameCache>())
             .or_insert_with(|| Box::<FrameCache>::default())
             .as_any_mut()
             .downcast_mut::<FrameCache>()
@@ -152,8 +152,8 @@ impl Clone for CacheStorage {
     }
 }
 
-impl std::fmt::Debug for CacheStorage {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for CacheStorage {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         write!(
             f,
             "FrameCacheStorage[{} caches with {} elements]",

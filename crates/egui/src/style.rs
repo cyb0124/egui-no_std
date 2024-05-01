@@ -2,8 +2,12 @@
 
 #![allow(clippy::if_same_then_else)]
 
-use std::collections::BTreeMap;
-
+use alloc::borrow::ToOwned;
+use alloc::collections::BTreeMap;
+use alloc::format;
+use alloc::rc::Rc;
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use epaint::{Rounding, Shadow, Stroke};
 
 use crate::{
@@ -41,11 +45,11 @@ pub enum TextStyle {
     /// ```
     /// egui::TextStyle::Name("footing".into());
     /// ````
-    Name(std::sync::Arc<str>),
+    Name(Rc<str>),
 }
 
-impl std::fmt::Display for TextStyle {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Display for TextStyle {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             Self::Small => "Small".fmt(f),
             Self::Body => "Body".fmt(f),
@@ -2009,7 +2013,7 @@ impl DebugOptions {
 }
 
 // TODO(emilk): improve and standardize
-fn two_drag_values(value: &mut Vec2, range: std::ops::RangeInclusive<f32>) -> impl Widget + '_ {
+fn two_drag_values(value: &mut Vec2, range: core::ops::RangeInclusive<f32>) -> impl Widget + '_ {
     move |ui: &mut crate::Ui| {
         ui.horizontal(|ui| {
             ui.add(
@@ -2094,8 +2098,8 @@ impl NumericColorSpace {
     }
 }
 
-impl std::fmt::Display for NumericColorSpace {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Display for NumericColorSpace {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             Self::GammaByte => write!(f, "U8"),
             Self::Linear => write!(f, "F"),

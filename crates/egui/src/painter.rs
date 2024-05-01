@@ -1,9 +1,12 @@
-use std::sync::Arc;
-
 use crate::{
     emath::{Align2, Pos2, Rangef, Rect, Vec2},
     layers::{LayerId, PaintList, ShapeIdx},
     Color32, Context, FontId,
+};
+use alloc::{
+    format,
+    rc::Rc,
+    string::{String, ToString},
 };
 use epaint::{
     text::{Fonts, Galley, LayoutJob},
@@ -248,7 +251,7 @@ impl Painter {
         );
     }
 
-    pub fn error(&self, pos: Pos2, text: impl std::fmt::Display) -> Rect {
+    pub fn error(&self, pos: Pos2, text: impl alloc::fmt::Display) -> Rect {
         let color = self.ctx.style().visuals.error_fg_color;
         self.debug_text(pos, Align2::LEFT_TOP, color, format!("🔥 {text}"))
     }
@@ -366,7 +369,7 @@ impl Painter {
     /// Show an arrow starting at `origin` and going in the direction of `vec`, with the length `vec.length()`.
     pub fn arrow(&self, origin: Pos2, vec: Vec2, stroke: impl Into<Stroke>) {
         use crate::emath::*;
-        let rot = Rot2::from_angle(std::f32::consts::TAU / 10.0);
+        let rot = Rot2::from_angle(core::f32::consts::TAU / 10.0);
         let tip_length = vec.length() / 4.0;
         let tip = origin + vec;
         let dir = vec.normalized();
@@ -441,7 +444,7 @@ impl Painter {
         font_id: FontId,
         color: crate::Color32,
         wrap_width: f32,
-    ) -> Arc<Galley> {
+    ) -> Rc<Galley> {
         self.fonts(|f| f.layout(text, font_id, color, wrap_width))
     }
 
@@ -455,7 +458,7 @@ impl Painter {
         text: String,
         font_id: FontId,
         color: crate::Color32,
-    ) -> Arc<Galley> {
+    ) -> Rc<Galley> {
         self.fonts(|f| f.layout(text, font_id, color, f32::INFINITY))
     }
 
@@ -464,7 +467,7 @@ impl Painter {
     /// Paint the results with [`Self::galley`].
     #[inline]
     #[must_use]
-    pub fn layout_job(&self, layout_job: LayoutJob) -> Arc<Galley> {
+    pub fn layout_job(&self, layout_job: LayoutJob) -> Rc<Galley> {
         self.fonts(|f| f.layout_job(layout_job))
     }
 
@@ -476,7 +479,7 @@ impl Painter {
     ///
     /// Any non-placeholder color in the galley takes precedence over this fallback color.
     #[inline]
-    pub fn galley(&self, pos: Pos2, galley: Arc<Galley>, fallback_color: Color32) {
+    pub fn galley(&self, pos: Pos2, galley: Rc<Galley>, fallback_color: Color32) {
         if !galley.is_empty() {
             self.add(Shape::galley(pos, galley, fallback_color));
         }
@@ -491,7 +494,7 @@ impl Painter {
     pub fn galley_with_override_text_color(
         &self,
         pos: Pos2,
-        galley: Arc<Galley>,
+        galley: Rc<Galley>,
         text_color: Color32,
     ) {
         if !galley.is_empty() {
@@ -503,7 +506,7 @@ impl Painter {
 
     #[deprecated = "Use `Painter::galley` or `Painter::galley_with_override_text_color` instead"]
     #[inline]
-    pub fn galley_with_color(&self, pos: Pos2, galley: Arc<Galley>, text_color: Color32) {
+    pub fn galley_with_color(&self, pos: Pos2, galley: Rc<Galley>, text_color: Color32) {
         if !galley.is_empty() {
             self.add(Shape::galley_with_override_text_color(
                 pos, galley, text_color,

@@ -19,11 +19,14 @@
 #![cfg_attr(feature = "document-features", doc = document_features::document_features!())]
 //!
 
+#![no_std]
 #![allow(clippy::float_cmp)]
-#![cfg_attr(feature = "puffin", deny(unsafe_code))]
-#![cfg_attr(not(feature = "puffin"), forbid(unsafe_code))]
+#![forbid(unsafe_code)]
 
-use std::ops::{Add, Div, Mul, RangeInclusive, Sub};
+extern crate alloc;
+use alloc::{format, string::String};
+use core::ops::{Add, Div, Mul, RangeInclusive, Sub};
+use num_traits::Float as _;
 
 // ----------------------------------------------------------------------------
 
@@ -238,7 +241,7 @@ fn test_format() {
     assert_eq!(format_with_minimum_decimals(3.14, 2), "3.14");
     assert_eq!(format_with_minimum_decimals(3.14, 3), "3.140");
     assert_eq!(
-        format_with_minimum_decimals(std::f64::consts::PI, 2),
+        format_with_minimum_decimals(core::f64::consts::PI, 2),
         "3.14159"
     );
 }
@@ -334,7 +337,7 @@ impl_num_ext!(Pos2);
 
 /// Wrap angle to `[-PI, PI]` range.
 pub fn normalized_angle(mut angle: f32) -> f32 {
-    use std::f32::consts::{PI, TAU};
+    use core::f32::consts::{PI, TAU};
     angle %= TAU;
     if angle > PI {
         angle -= TAU;
@@ -354,7 +357,7 @@ fn test_normalized_angle() {
         };
     }
 
-    use std::f32::consts::TAU;
+    use core::f32::consts::TAU;
     almost_eq!(normalized_angle(-3.0 * TAU), 0.0);
     almost_eq!(normalized_angle(-2.3 * TAU), -0.3 * TAU);
     almost_eq!(normalized_angle(-TAU), 0.0);

@@ -1,30 +1,20 @@
+use alloc::{rc::Rc, string::String};
+use core::{cell::RefCell, mem::size_of};
 use egui::{
-    ahash::HashMap,
     load::{BytesPoll, ImageLoadResult, ImageLoader, ImagePoll, LoadError, SizeHint},
-    mutex::Mutex,
     ColorImage,
 };
-use std::{mem::size_of, path::Path, sync::Arc};
+use hashbrown::HashMap;
 
-type Entry = Result<Arc<ColorImage>, String>;
+type Entry = Result<Rc<ColorImage>, String>;
 
 #[derive(Default)]
 pub struct ImageCrateLoader {
-    cache: Mutex<HashMap<String, Entry>>,
+    cache: RefCell<HashMap<String, Entry>>,
 }
 
 impl ImageCrateLoader {
     pub const ID: &'static str = egui::generate_loader_id!(ImageCrateLoader);
-}
-
-fn is_supported_uri(uri: &str) -> bool {
-    // TODO(emilk): use https://github.com/image-rs/image/pull/2038 when new `image` crate is released.
-    let Some(ext) = Path::new(uri).extension().and_then(|ext| ext.to_str()) else {
-        // `true` because if there's no extension, assume that we support it
-        return true;
-    };
-
-    ext != "svg"
 }
 
 fn is_unsupported_mime(mime: &str) -> bool {
@@ -43,12 +33,7 @@ impl ImageLoader for ImageCrateLoader {
         // 2. Mime from `BytesPoll::Ready`
         // 3. image::guess_format
 
-        // (1)
-        if !is_supported_uri(uri) {
-            return Err(LoadError::NotSupported);
-        }
-
-        let mut cache = self.cache.lock();
+        let mut cache = self.cache.borrow_mut();
         if let Some(entry) = cache.get(uri).cloned() {
             match entry {
                 Ok(image) => Ok(ImagePoll::Ready { image }),
@@ -64,9 +49,7 @@ impl ImageLoader for ImageCrateLoader {
                         return Err(LoadError::NotSupported);
                     }
 
-                    log::trace!("started loading {uri:?}");
-                    let result = crate::image::load_image_bytes(&bytes).map(Arc::new);
-                    log::trace!("finished loading {uri:?}");
+                    let result = crate::image::load_image_bytes(&bytes).map(Rc::new);
                     cache.insert(uri.into(), result.clone());
                     match result {
                         Ok(image) => Ok(ImagePoll::Ready { image }),
@@ -80,36 +63,21 @@ impl ImageLoader for ImageCrateLoader {
     }
 
     fn forget(&self, uri: &str) {
-        let _ = self.cache.lock().remove(uri);
+        let _ = self.cache.borrow_mut().remove(uri);
     }
 
     fn forget_all(&self) {
-        self.cache.lock().clear();
+        self.cache.borrow_mut().clear();
     }
 
     fn byte_size(&self) -> usize {
         self.cache
-            .lock()
+            .borrow()
             .values()
             .map(|result| match result {
                 Ok(image) => image.pixels.len() * size_of::<egui::Color32>(),
                 Err(err) => err.len(),
             })
             .sum()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn check_support() {
-        assert!(is_supported_uri("https://test.png"));
-        assert!(is_supported_uri("test.jpeg"));
-        assert!(is_supported_uri("http://test.gif"));
-        assert!(is_supported_uri("test.webp"));
-        assert!(is_supported_uri("file://test"));
-        assert!(!is_supported_uri("test.svg"));
     }
 }

@@ -1,6 +1,7 @@
-use emath::{remap_clamp, Rect};
-
 use crate::{FontImage, ImageDelta};
+use alloc::{vec, vec::Vec};
+use emath::{remap_clamp, Rect};
+use num_traits::Float;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Rectu {
@@ -188,7 +189,7 @@ impl TextureAtlas {
     pub fn take_delta(&mut self) -> Option<ImageDelta> {
         let texture_options = Self::texture_options();
 
-        let dirty = std::mem::replace(&mut self.dirty, Rectu::NOTHING);
+        let dirty = core::mem::replace(&mut self.dirty, Rectu::NOTHING);
         if dirty == Rectu::NOTHING {
             None
         } else if dirty == Rectu::EVERYTHING {
@@ -228,9 +229,6 @@ impl TextureAtlas {
 
         if required_height > self.max_height() {
             // This is a bad place to be - we need to start reusing space :/
-
-            #[cfg(feature = "log")]
-            log::warn!("epaint texture atlas overflowed!");
 
             self.cursor = (0, self.image.height() / 3); // Restart a bit down - the top of the atlas has too many important things in it
             self.overflowed = true; // this will signal the user that we need to recreate the texture atlas next frame.

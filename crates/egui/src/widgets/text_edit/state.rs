@@ -1,10 +1,7 @@
-use std::sync::Arc;
-
-use crate::mutex::Mutex;
-
-use crate::*;
-
 use self::text_selection::{CCursorRange, CursorRange, TextCursorState};
+use crate::*;
+use alloc::{rc::Rc, string::String};
+use core::cell::RefCell;
 
 pub type TextEditUndoer = crate::util::undoer::Undoer<(CCursorRange, String)>;
 
@@ -38,7 +35,7 @@ pub struct TextEditState {
 
     /// Wrapped in Arc for cheaper clones.
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub(crate) undoer: Arc<Mutex<TextEditUndoer>>,
+    pub(crate) undoer: Rc<RefCell<TextEditUndoer>>,
 
     // If IME candidate window is shown on this text edit.
     #[cfg_attr(feature = "serde", serde(skip))]
@@ -85,11 +82,11 @@ impl TextEditState {
     }
 
     pub fn undoer(&self) -> TextEditUndoer {
-        self.undoer.lock().clone()
+        self.undoer.borrow().clone()
     }
 
     pub fn set_undoer(&mut self, undoer: TextEditUndoer) {
-        *self.undoer.lock() = undoer;
+        *self.undoer.borrow_mut() = undoer;
     }
 
     pub fn clear_undoer(&mut self) {

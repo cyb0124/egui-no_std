@@ -1,15 +1,15 @@
 //! The different shapes that can be painted.
 
-use std::{any::Any, sync::Arc};
-
 use crate::{
     stroke::PathStroke,
     text::{FontId, Fonts, Galley},
     Color32, Mesh, Stroke, TextureId,
 };
-use emath::*;
-
 pub use crate::{CubicBezierShape, QuadraticBezierShape};
+use alloc::{rc::Rc, string::ToString, vec::Vec};
+use core::any::Any;
+use emath::*;
+use num_traits::Float;
 
 /// A paint primitive such as a circle or a piece of text.
 /// Coordinates are all screen space points (not physical pixels).
@@ -65,12 +65,6 @@ pub enum Shape {
 
     /// Backend-specific painting.
     Callback(PaintCallback),
-}
-
-#[test]
-fn shape_impl_send_sync() {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<Shape>();
 }
 
 impl From<Vec<Self>> for Shape {
@@ -289,7 +283,7 @@ impl Shape {
     ///
     /// Any non-placeholder color in the galley takes precedence over this fallback color.
     #[inline]
-    pub fn galley(pos: Pos2, galley: Arc<Galley>, fallback_color: Color32) -> Self {
+    pub fn galley(pos: Pos2, galley: Rc<Galley>, fallback_color: Color32) -> Self {
         TextShape::new(pos, galley, fallback_color).into()
     }
 
@@ -297,7 +291,7 @@ impl Shape {
     #[inline]
     pub fn galley_with_override_text_color(
         pos: Pos2,
-        galley: Arc<Galley>,
+        galley: Rc<Galley>,
         text_color: Color32,
     ) -> Self {
         TextShape::new(pos, galley, text_color)
@@ -307,7 +301,7 @@ impl Shape {
 
     #[inline]
     #[deprecated = "Use `Shape::galley` or `Shape::galley_with_override_text_color` instead"]
-    pub fn galley_with_color(pos: Pos2, galley: Arc<Galley>, text_color: Color32) -> Self {
+    pub fn galley_with_color(pos: Pos2, galley: Rc<Galley>, text_color: Color32) -> Self {
         Self::galley_with_override_text_color(pos, galley, text_color)
     }
 
@@ -432,7 +426,7 @@ impl Shape {
                 text_shape.pos = transform * text_shape.pos;
 
                 // Scale text:
-                let galley = Arc::make_mut(&mut text_shape.galley);
+                let galley = Rc::make_mut(&mut text_shape.galley);
                 for row in &mut galley.rows {
                     row.visuals.mesh_bounds = transform.scaling * row.visuals.mesh_bounds;
                     for v in &mut row.visuals.mesh.vertices {
@@ -858,7 +852,7 @@ impl Rounding {
     }
 }
 
-impl std::ops::Add for Rounding {
+impl core::ops::Add for Rounding {
     type Output = Self;
     #[inline]
     fn add(self, rhs: Self) -> Self {
@@ -871,7 +865,7 @@ impl std::ops::Add for Rounding {
     }
 }
 
-impl std::ops::AddAssign for Rounding {
+impl core::ops::AddAssign for Rounding {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
         *self = Self {
@@ -883,7 +877,7 @@ impl std::ops::AddAssign for Rounding {
     }
 }
 
-impl std::ops::AddAssign<f32> for Rounding {
+impl core::ops::AddAssign<f32> for Rounding {
     #[inline]
     fn add_assign(&mut self, rhs: f32) {
         *self = Self {
@@ -895,7 +889,7 @@ impl std::ops::AddAssign<f32> for Rounding {
     }
 }
 
-impl std::ops::Sub for Rounding {
+impl core::ops::Sub for Rounding {
     type Output = Self;
     #[inline]
     fn sub(self, rhs: Self) -> Self {
@@ -908,7 +902,7 @@ impl std::ops::Sub for Rounding {
     }
 }
 
-impl std::ops::SubAssign for Rounding {
+impl core::ops::SubAssign for Rounding {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
         *self = Self {
@@ -920,7 +914,7 @@ impl std::ops::SubAssign for Rounding {
     }
 }
 
-impl std::ops::SubAssign<f32> for Rounding {
+impl core::ops::SubAssign<f32> for Rounding {
     #[inline]
     fn sub_assign(&mut self, rhs: f32) {
         *self = Self {
@@ -932,7 +926,7 @@ impl std::ops::SubAssign<f32> for Rounding {
     }
 }
 
-impl std::ops::Div<f32> for Rounding {
+impl core::ops::Div<f32> for Rounding {
     type Output = Self;
     #[inline]
     fn div(self, rhs: f32) -> Self {
@@ -945,7 +939,7 @@ impl std::ops::Div<f32> for Rounding {
     }
 }
 
-impl std::ops::DivAssign<f32> for Rounding {
+impl core::ops::DivAssign<f32> for Rounding {
     #[inline]
     fn div_assign(&mut self, rhs: f32) {
         *self = Self {
@@ -957,7 +951,7 @@ impl std::ops::DivAssign<f32> for Rounding {
     }
 }
 
-impl std::ops::Mul<f32> for Rounding {
+impl core::ops::Mul<f32> for Rounding {
     type Output = Self;
     #[inline]
     fn mul(self, rhs: f32) -> Self {
@@ -970,7 +964,7 @@ impl std::ops::Mul<f32> for Rounding {
     }
 }
 
-impl std::ops::MulAssign<f32> for Rounding {
+impl core::ops::MulAssign<f32> for Rounding {
     #[inline]
     fn mul_assign(&mut self, rhs: f32) {
         *self = Self {
@@ -994,7 +988,7 @@ pub struct TextShape {
     pub pos: Pos2,
 
     /// The laid out text, from [`Fonts::layout_job`].
-    pub galley: Arc<Galley>,
+    pub galley: Rc<Galley>,
 
     /// Add this underline to the whole text.
     /// You can also set an underline when creating the galley.
@@ -1024,7 +1018,7 @@ impl TextShape {
     ///
     /// Any non-placeholder color in the galley takes precedence over this fallback color.
     #[inline]
-    pub fn new(pos: Pos2, galley: Arc<Galley>, fallback_color: Color32) -> Self {
+    pub fn new(pos: Pos2, galley: Rc<Galley>, fallback_color: Color32) -> Self {
         Self {
             pos,
             galley,
@@ -1234,7 +1228,7 @@ fn test_viewport_rounding() {
         let left = Rect::from_min_max(pos2(0.0, 0.0), pos2(100.0, 100.0)).with_max_x(x);
         let right = Rect::from_min_max(pos2(0.0, 0.0), pos2(100.0, 100.0)).with_min_x(x);
 
-        for pixels_per_point in [0.618, 1.0, std::f32::consts::PI] {
+        for pixels_per_point in [0.618, 1.0, core::f32::consts::PI] {
             let left = ViewportInPixels::from_points(&left, pixels_per_point, [100, 100]);
             let right = ViewportInPixels::from_points(&right, pixels_per_point, [100, 100]);
             assert_eq!(left.left_px + left.width_px, right.left_px);
@@ -1280,20 +1274,20 @@ pub struct PaintCallback {
     /// program, vertex array, etc.
     ///
     /// Shape has to be clone, therefore this has to be an `Arc` instead of a `Box`.
-    pub callback: Arc<dyn Any + Send + Sync>,
+    pub callback: Rc<dyn Any>,
 }
 
-impl std::fmt::Debug for PaintCallback {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for PaintCallback {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         f.debug_struct("CustomShape")
             .field("rect", &self.rect)
             .finish_non_exhaustive()
     }
 }
 
-impl std::cmp::PartialEq for PaintCallback {
+impl core::cmp::PartialEq for PaintCallback {
     fn eq(&self, other: &Self) -> bool {
-        self.rect.eq(&other.rect) && Arc::ptr_eq(&self.callback, &other.callback)
+        self.rect.eq(&other.rect) && Rc::ptr_eq(&self.callback, &other.callback)
     }
 }
 

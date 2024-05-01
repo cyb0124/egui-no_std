@@ -1,14 +1,14 @@
-use std::{collections::BTreeMap, sync::Arc};
-
 use crate::{
-    mutex::{Mutex, MutexGuard},
     text::{
         font::{Font, FontImpl},
         Galley, LayoutJob,
     },
     TextureAtlas,
 };
+use alloc::{borrow::ToOwned, collections::BTreeMap, rc::Rc, string::String, vec, vec::Vec};
+use core::cell::{RefCell, RefMut};
 use emath::{NumExt as _, OrderedFloat};
+use num_traits::Float;
 
 // ----------------------------------------------------------------------------
 
@@ -52,9 +52,9 @@ impl FontId {
 }
 
 #[allow(clippy::derived_hash_with_manual_eq)]
-impl std::hash::Hash for FontId {
+impl core::hash::Hash for FontId {
     #[inline(always)]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let Self { size, family } = self;
         emath::OrderedFloat(*size).hash(state);
         family.hash(state);
@@ -89,11 +89,11 @@ pub enum FontFamily {
     /// FontFamily::Name("arial".into());
     /// FontFamily::Name("serif".into());
     /// ```
-    Name(Arc<str>),
+    Name(Rc<str>),
 }
 
-impl std::fmt::Display for FontFamily {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Display for FontFamily {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             Self::Monospace => "Monospace".fmt(f),
             Self::Proportional => "Proportional".fmt(f),
@@ -109,7 +109,7 @@ impl std::fmt::Display for FontFamily {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FontData {
     /// The content of a `.ttf` or `.otf` file.
-    pub font: std::borrow::Cow<'static, [u8]>,
+    pub font: alloc::borrow::Cow<'static, [u8]>,
 
     /// Which font face in the file to use.
     /// When in doubt, use `0`.
@@ -122,7 +122,7 @@ pub struct FontData {
 impl FontData {
     pub fn from_static(font: &'static [u8]) -> Self {
         Self {
-            font: std::borrow::Cow::Borrowed(font),
+            font: alloc::borrow::Cow::Borrowed(font),
             index: 0,
             tweak: Default::default(),
         }
@@ -130,7 +130,7 @@ impl FontData {
 
     pub fn from_owned(font: Vec<u8>) -> Self {
         Self {
-            font: std::borrow::Cow::Owned(font),
+            font: alloc::borrow::Cow::Owned(font),
             index: 0,
             tweak: Default::default(),
         }
@@ -189,15 +189,13 @@ impl Default for FontTweak {
 
 // ----------------------------------------------------------------------------
 
-fn ab_glyph_font_from_font_data(name: &str, data: &FontData) -> ab_glyph::FontArc {
+fn ab_glyph_font_from_font_data(name: &str, data: &FontData) -> Rc<ab_glyph::FontVec> {
     match &data.font {
-        std::borrow::Cow::Borrowed(bytes) => {
-            ab_glyph::FontRef::try_from_slice_and_index(bytes, data.index)
-                .map(ab_glyph::FontArc::from)
+        alloc::borrow::Cow::Borrowed(bytes) => {
+            ab_glyph::FontVec::try_from_vec_and_index(bytes.to_vec(), data.index).map(Rc::new)
         }
-        std::borrow::Cow::Owned(bytes) => {
-            ab_glyph::FontVec::try_from_vec_and_index(bytes.clone(), data.index)
-                .map(ab_glyph::FontArc::from)
+        alloc::borrow::Cow::Owned(bytes) => {
+            ab_glyph::FontVec::try_from_vec_and_index(bytes.clone(), data.index).map(Rc::new)
         }
     }
     .unwrap_or_else(|err| panic!("Error parsing {name:?} TTF/OTF font file: {err}"))
@@ -366,7 +364,7 @@ impl FontDefinitions {
 ///
 /// You need to call [`Self::begin_frame`] and [`Self::font_image_delta`] once every frame.
 #[derive(Clone)]
-pub struct Fonts(Arc<Mutex<FontsAndCache>>);
+pub struct Fonts(Rc<RefCell<FontsAndCache>>);
 
 impl Fonts {
     /// Create a new [`Fonts`] for text layout.
@@ -383,7 +381,7 @@ impl Fonts {
             fonts: FontsImpl::new(pixels_per_point, max_texture_side, definitions),
             galley_cache: Default::default(),
         };
-        Self(Arc::new(Mutex::new(fonts_and_cache)))
+        Self(Rc::new(RefCell::new(fonts_and_cache)))
     }
 
     /// Call at the start of each frame with the latest known
@@ -394,11 +392,11 @@ impl Fonts {
     /// This function will react to changes in `pixels_per_point` and `max_texture_side`,
     /// as well as notice when the font atlas is getting full, and handle that.
     pub fn begin_frame(&self, pixels_per_point: f32, max_texture_side: usize) {
-        let mut fonts_and_cache = self.0.lock();
+        let mut fonts_and_cache = self.0.borrow_mut();
 
         let pixels_per_point_changed = fonts_and_cache.fonts.pixels_per_point != pixels_per_point;
         let max_texture_side_changed = fonts_and_cache.fonts.max_texture_side != max_texture_side;
-        let font_atlas_almost_full = fonts_and_cache.fonts.atlas.lock().fill_ratio() > 0.8;
+        let font_atlas_almost_full = fonts_and_cache.fonts.atlas.borrow_mut().fill_ratio() > 0.8;
         let needs_recreate =
             pixels_per_point_changed || max_texture_side_changed || font_atlas_almost_full;
 
@@ -416,14 +414,14 @@ impl Fonts {
 
     /// Call at the end of each frame (before painting) to get the change to the font texture since last call.
     pub fn font_image_delta(&self) -> Option<crate::ImageDelta> {
-        self.lock().fonts.atlas.lock().take_delta()
+        self.lock().fonts.atlas.borrow_mut().take_delta()
     }
 
     /// Access the underlying [`FontsAndCache`].
     #[doc(hidden)]
     #[inline]
-    pub fn lock(&self) -> MutexGuard<'_, FontsAndCache> {
-        self.0.lock()
+    pub fn lock(&self) -> RefMut<'_, FontsAndCache> {
+        self.0.borrow_mut()
     }
 
     #[inline]
@@ -438,20 +436,20 @@ impl Fonts {
 
     /// The font atlas.
     /// Pass this to [`crate::Tessellator`].
-    pub fn texture_atlas(&self) -> Arc<Mutex<TextureAtlas>> {
+    pub fn texture_atlas(&self) -> Rc<RefCell<TextureAtlas>> {
         self.lock().fonts.atlas.clone()
     }
 
     /// The full font atlas image.
     #[inline]
     pub fn image(&self) -> crate::FontImage {
-        self.lock().fonts.atlas.lock().image().clone()
+        self.lock().fonts.atlas.borrow_mut().image().clone()
     }
 
     /// Current size of the font image.
     /// Pass this to [`crate::Tessellator`].
     pub fn font_image_size(&self) -> [usize; 2] {
-        self.lock().fonts.atlas.lock().size()
+        self.lock().fonts.atlas.borrow_mut().size()
     }
 
     /// Width of this character in points.
@@ -496,7 +494,7 @@ impl Fonts {
     ///
     /// The implementation uses memoization so repeated calls are cheap.
     #[inline]
-    pub fn layout_job(&self, job: LayoutJob) -> Arc<Galley> {
+    pub fn layout_job(&self, job: LayoutJob) -> Rc<Galley> {
         self.lock().layout_job(job)
     }
 
@@ -509,7 +507,7 @@ impl Fonts {
     /// This increases as new fonts and/or glyphs are used,
     /// but can also decrease in a call to [`Self::begin_frame`].
     pub fn font_atlas_fill_ratio(&self) -> f32 {
-        self.lock().fonts.atlas.lock().fill_ratio()
+        self.lock().fonts.atlas.borrow_mut().fill_ratio()
     }
 
     /// Will wrap text at the given width and line break at `\n`.
@@ -521,7 +519,7 @@ impl Fonts {
         font_id: FontId,
         color: crate::Color32,
         wrap_width: f32,
-    ) -> Arc<Galley> {
+    ) -> Rc<Galley> {
         let job = LayoutJob::simple(text, font_id, color, wrap_width);
         self.layout_job(job)
     }
@@ -534,7 +532,7 @@ impl Fonts {
         text: String,
         font_id: FontId,
         color: crate::Color32,
-    ) -> Arc<Galley> {
+    ) -> Rc<Galley> {
         let job = LayoutJob::simple(text, font_id, color, f32::INFINITY);
         self.layout_job(job)
     }
@@ -547,7 +545,7 @@ impl Fonts {
         text: String,
         font_id: FontId,
         wrap_width: f32,
-    ) -> Arc<Galley> {
+    ) -> Rc<Galley> {
         self.layout(text, font_id, crate::Color32::PLACEHOLDER, wrap_width)
     }
 }
@@ -560,7 +558,7 @@ pub struct FontsAndCache {
 }
 
 impl FontsAndCache {
-    fn layout_job(&mut self, job: LayoutJob) -> Arc<Galley> {
+    fn layout_job(&mut self, job: LayoutJob) -> Rc<Galley> {
         self.galley_cache.layout(&mut self.fonts, job)
     }
 }
@@ -574,9 +572,9 @@ pub struct FontsImpl {
     pixels_per_point: f32,
     max_texture_side: usize,
     definitions: FontDefinitions,
-    atlas: Arc<Mutex<TextureAtlas>>,
+    atlas: Rc<RefCell<TextureAtlas>>,
     font_impl_cache: FontImplCache,
-    sized_family: ahash::HashMap<(OrderedFloat<f32>, FontFamily), Font>,
+    sized_family: hashbrown::HashMap<(OrderedFloat<f32>, FontFamily), Font>,
 }
 
 impl FontsImpl {
@@ -596,7 +594,7 @@ impl FontsImpl {
         let initial_height = 32; // Keep initial font atlas small, so it is fast to upload to GPU. This will expand as needed anyways.
         let atlas = TextureAtlas::new([texture_width, initial_height]);
 
-        let atlas = Arc::new(Mutex::new(atlas));
+        let atlas = Rc::new(RefCell::new(atlas));
 
         let font_impl_cache =
             FontImplCache::new(atlas.clone(), pixels_per_point, &definitions.font_data);
@@ -632,7 +630,7 @@ impl FontsImpl {
                 let fonts = fonts
                     .unwrap_or_else(|| panic!("FontFamily::{family:?} is not bound to any fonts"));
 
-                let fonts: Vec<Arc<FontImpl>> = fonts
+                let fonts: Vec<Rc<FontImpl>> = fonts
                     .iter()
                     .map(|font_name| self.font_impl_cache.font_impl(*size, font_name))
                     .collect();
@@ -667,29 +665,29 @@ impl FontsImpl {
 struct CachedGalley {
     /// When it was last used
     last_used: u32,
-    galley: Arc<Galley>,
+    galley: Rc<Galley>,
 }
 
 #[derive(Default)]
 struct GalleyCache {
     /// Frame counter used to do garbage collection on the cache
     generation: u32,
-    cache: nohash_hasher::IntMap<u64, CachedGalley>,
+    cache: hashbrown::HashMap<u64, CachedGalley, nohash_hasher::BuildNoHashHasher<u64>>,
 }
 
 impl GalleyCache {
-    fn layout(&mut self, fonts: &mut FontsImpl, job: LayoutJob) -> Arc<Galley> {
+    fn layout(&mut self, fonts: &mut FontsImpl, job: LayoutJob) -> Rc<Galley> {
         let hash = crate::util::hash(&job); // TODO(emilk): even faster hasher?
 
         match self.cache.entry(hash) {
-            std::collections::hash_map::Entry::Occupied(entry) => {
+            hashbrown::hash_map::Entry::Occupied(entry) => {
                 let cached = entry.into_mut();
                 cached.last_used = self.generation;
                 cached.galley.clone()
             }
-            std::collections::hash_map::Entry::Vacant(entry) => {
+            hashbrown::hash_map::Entry::Vacant(entry) => {
                 let galley = super::layout(fonts, job.into());
-                let galley = Arc::new(galley);
+                let galley = Rc::new(galley);
                 entry.insert(CachedGalley {
                     last_used: self.generation,
                     galley: galley.clone(),
@@ -716,17 +714,17 @@ impl GalleyCache {
 // ----------------------------------------------------------------------------
 
 struct FontImplCache {
-    atlas: Arc<Mutex<TextureAtlas>>,
+    atlas: Rc<RefCell<TextureAtlas>>,
     pixels_per_point: f32,
-    ab_glyph_fonts: BTreeMap<String, (FontTweak, ab_glyph::FontArc)>,
+    ab_glyph_fonts: BTreeMap<String, (FontTweak, Rc<ab_glyph::FontVec>)>,
 
     /// Map font pixel sizes and names to the cached [`FontImpl`].
-    cache: ahash::HashMap<(u32, String), Arc<FontImpl>>,
+    cache: hashbrown::HashMap<(u32, String), Rc<FontImpl>>,
 }
 
 impl FontImplCache {
     pub fn new(
-        atlas: Arc<Mutex<TextureAtlas>>,
+        atlas: Rc<RefCell<TextureAtlas>>,
         pixels_per_point: f32,
         font_data: &BTreeMap<String, FontData>,
     ) -> Self {
@@ -747,7 +745,7 @@ impl FontImplCache {
         }
     }
 
-    pub fn font_impl(&mut self, scale_in_points: f32, font_name: &str) -> Arc<FontImpl> {
+    pub fn font_impl(&mut self, scale_in_points: f32, font_name: &str) -> Rc<FontImpl> {
         use ab_glyph::Font as _;
 
         let (tweak, ab_glyph_font) = self
@@ -771,7 +769,7 @@ impl FontImplCache {
                 font_name.to_owned(),
             ))
             .or_insert_with(|| {
-                Arc::new(FontImpl::new(
+                Rc::new(FontImpl::new(
                     self.atlas.clone(),
                     self.pixels_per_point,
                     font_name.to_owned(),

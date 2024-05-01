@@ -1,9 +1,13 @@
 #![warn(missing_docs)] // Let's keep `Ui` well-documented.
 #![allow(clippy::use_self)]
 
-use std::{any::Any, hash::Hash, sync::Arc};
-
-use epaint::mutex::RwLock;
+use alloc::{
+    boxed::Box,
+    rc::Rc,
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{any::Any, cell::RefCell, hash::Hash};
 
 use crate::{
     containers::*, ecolor::*, epaint::text::Fonts, layout::*, menu::MenuState, placer::Placer,
@@ -52,7 +56,7 @@ pub struct Ui {
     /// The [`Style`] (visuals, spacing, etc) of this ui.
     /// Commonly many [`Ui`]:s share the same [`Style`].
     /// The [`Ui`] implements copy-on-write for this.
-    style: Arc<Style>,
+    style: Rc<Style>,
 
     /// Handles the [`Ui`] size and the placement of new widgets.
     placer: Placer,
@@ -62,7 +66,7 @@ pub struct Ui {
     enabled: bool,
 
     /// Indicates whether this Ui belongs to a Menu.
-    menu_state: Option<Arc<RwLock<MenuState>>>,
+    menu_state: Option<Rc<RefCell<MenuState>>>,
 }
 
 impl Ui {
@@ -150,7 +154,7 @@ impl Ui {
     ///
     /// Note that this may be a different [`Style`] than that of [`Context::style`].
     #[inline]
-    pub fn style(&self) -> &Arc<Style> {
+    pub fn style(&self) -> &Rc<Style> {
         &self.style
     }
 
@@ -166,13 +170,13 @@ impl Ui {
     /// # });
     /// ```
     pub fn style_mut(&mut self) -> &mut Style {
-        Arc::make_mut(&mut self.style) // clone-on-write
+        Rc::make_mut(&mut self.style) // clone-on-write
     }
 
     /// Changes apply to this [`Ui`] and its subsequent children.
     ///
     /// To set the visuals of all [`Ui`]:s, use [`Context::set_visuals`].
-    pub fn set_style(&mut self, style: impl Into<Arc<Style>>) {
+    pub fn set_style(&mut self, style: impl Into<Rc<Style>>) {
         self.style = style.into();
     }
 
@@ -1587,7 +1591,7 @@ impl Ui {
     /// but is shown to the user in fractions of one Tau (i.e. fractions of one turn).
     /// The angle is NOT wrapped, so the user may select, for instance 2𝞃 (720°)
     pub fn drag_angle_tau(&mut self, radians: &mut f32) -> Response {
-        use std::f32::consts::TAU;
+        use core::f32::consts::TAU;
 
         let mut taus = *radians / TAU;
         let mut response = self.add(DragValue::new(&mut taus).speed(0.01).suffix("τ"));
@@ -2189,7 +2193,7 @@ impl Ui {
         add_contents: impl FnOnce(&mut Self) -> R,
     ) -> InnerResponse<R>
     where
-        Payload: Any + Send + Sync,
+        Payload: Any,
     {
         let is_being_dragged = self.ctx().is_being_dragged(id);
 
@@ -2237,9 +2241,9 @@ impl Ui {
         &mut self,
         frame: Frame,
         add_contents: impl FnOnce(&mut Ui) -> R,
-    ) -> (InnerResponse<R>, Option<Arc<Payload>>)
+    ) -> (InnerResponse<R>, Option<Rc<Payload>>)
     where
-        Payload: Any + Send + Sync,
+        Payload: Any,
     {
         let is_anything_being_dragged = DragAndDrop::has_any_payload(self.ctx());
         let can_accept_what_is_being_dragged =
@@ -2284,12 +2288,12 @@ impl Ui {
     /// See also: [`Self::menu_button`] and [`Response::context_menu`].
     pub fn close_menu(&mut self) {
         if let Some(menu_state) = &mut self.menu_state {
-            menu_state.write().close();
+            menu_state.borrow_mut().close();
         }
         self.menu_state = None;
     }
 
-    pub(crate) fn set_menu_state(&mut self, menu_state: Option<Arc<RwLock<MenuState>>>) {
+    pub(crate) fn set_menu_state(&mut self, menu_state: Option<Rc<RefCell<MenuState>>>) {
         self.menu_state = menu_state;
     }
 
@@ -2421,62 +2425,7 @@ fn register_rect(ui: &Ui, rect: Rect) {
     if debug.hover_shows_next {
         ui.placer.debug_paint_cursor(&painter, "next");
     }
-
-    // ----------------------------------------------
-
-    #[cfg(feature = "callstack")]
-    let callstack = crate::callstack::capture();
-
-    #[cfg(not(feature = "callstack"))]
-    let callstack = String::default();
-
-    if !callstack.is_empty() {
-        let font_id = FontId::monospace(12.0);
-        let text = format!("{callstack}\n\n(click to copy)");
-        let text_color = Color32::WHITE;
-        let galley = painter.layout_no_wrap(text, font_id, text_color);
-
-        // Position the text either under or above:
-        let screen_rect = ui.ctx().screen_rect();
-        let y = if galley.size().y <= rect.top() {
-            // Above
-            rect.top() - galley.size().y
-        } else {
-            // Below
-            rect.bottom()
-        };
-
-        let y = y
-            .at_most(screen_rect.bottom() - galley.size().y)
-            .at_least(0.0);
-
-        let x = rect
-            .left()
-            .at_most(screen_rect.right() - galley.size().x)
-            .at_least(0.0);
-        let text_pos = pos2(x, y);
-
-        let text_bg_color = Color32::from_black_alpha(180);
-        let text_rect_stroke_color = if is_clicking {
-            Color32::WHITE
-        } else {
-            text_bg_color
-        };
-        let text_rect = Rect::from_min_size(text_pos, galley.size());
-        painter.rect(text_rect, 0.0, text_bg_color, (1.0, text_rect_stroke_color));
-        painter.galley(text_pos, galley, text_color);
-
-        if ui.input(|i| i.pointer.any_click()) {
-            ui.ctx().copy_text(callstack);
-        }
-    }
 }
 
 #[cfg(not(debug_assertions))]
 fn register_rect(_ui: &Ui, _rect: Rect) {}
-
-#[test]
-fn ui_impl_send_sync() {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<Ui>();
-}

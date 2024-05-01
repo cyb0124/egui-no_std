@@ -1,6 +1,8 @@
 #![allow(deprecated)]
 
-use egui::{mutex::Mutex, TextureOptions};
+use alloc::{format, string::String, string::ToString};
+use core::cell::RefCell;
+use egui::TextureOptions;
 
 #[cfg(feature = "svg")]
 use egui::SizeHint;
@@ -19,10 +21,10 @@ pub struct RetainedImage {
     size: [usize; 2],
 
     /// Cleared once [`Self::texture`] has been loaded.
-    image: Mutex<egui::ColorImage>,
+    image: RefCell<egui::ColorImage>,
 
     /// Lazily loaded when we have an egui context.
-    texture: Mutex<Option<egui::TextureHandle>>,
+    texture: RefCell<Option<egui::TextureHandle>>,
 
     options: TextureOptions,
 }
@@ -32,7 +34,7 @@ impl RetainedImage {
         Self {
             debug_name: debug_name.into(),
             size: image.size,
-            image: Mutex::new(image),
+            image: RefCell::new(image),
             texture: Default::default(),
             options: Default::default(),
         }
@@ -118,7 +120,7 @@ impl RetainedImage {
 
         // If the texture has already been uploaded, this will force it to be re-uploaded with the
         // updated filter.
-        *self.texture.lock() = None;
+        *self.texture.borrow_mut() = None;
 
         self
     }
@@ -152,10 +154,10 @@ impl RetainedImage {
     /// The texture id for this image.
     pub fn texture_id(&self, ctx: &egui::Context) -> egui::TextureId {
         self.texture
-            .lock()
+            .borrow_mut()
             .get_or_insert_with(|| {
-                let image: &mut ColorImage = &mut self.image.lock();
-                let image = std::mem::take(image);
+                let image: &mut ColorImage = &mut self.image.borrow_mut();
+                let image = core::mem::take(image);
                 ctx.load_texture(&self.debug_name, image, self.options)
             })
             .id()
@@ -201,7 +203,6 @@ use egui::ColorImage;
 /// On invalid image or unsupported image format.
 #[cfg(feature = "image")]
 pub fn load_image_bytes(image_bytes: &[u8]) -> Result<egui::ColorImage, String> {
-    crate::profile_function!();
     let image = image::load_from_memory(image_bytes).map_err(|err| err.to_string())?;
     let size = [image.width() as _, image.height() as _];
     let image_buffer = image.to_rgba8();
@@ -236,12 +237,8 @@ pub fn load_svg_bytes_with_size(
 ) -> Result<egui::ColorImage, String> {
     use resvg::tiny_skia::{IntSize, Pixmap};
     use resvg::usvg::{Options, Tree, TreeParsing};
-
-    crate::profile_function!();
     let opt = Options::default();
-
     let mut rtree = Tree::from_data(svg_bytes, &opt).map_err(|err| err.to_string())?;
-
     let mut size = rtree.size.to_int_size();
     match size_hint {
         None => (),

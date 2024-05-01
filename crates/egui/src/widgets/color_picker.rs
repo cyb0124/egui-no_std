@@ -2,7 +2,9 @@
 
 use crate::util::fixed_cache::FixedCache;
 use crate::*;
+use alloc::{format, vec};
 use epaint::{ecolor::*, *};
+use num_traits::Float;
 
 fn contrast_color(color: impl Into<Rgba>) -> Color32 {
     if color.into().intensity() < 0.5 {

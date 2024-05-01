@@ -68,7 +68,7 @@ impl Resize {
 
     /// A source for the unique [`Id`], e.g. `.id_source("second_resize_area")` or `.id_source(loop_index)`.
     #[inline]
-    pub fn id_source(mut self, id_source: impl std::hash::Hash) -> Self {
+    pub fn id_source(mut self, id_source: impl core::hash::Hash) -> Self {
         self.id_source = Some(Id::new(id_source));
         self
     }
@@ -368,8 +368,6 @@ impl Resize {
         }
     }
 }
-
-use epaint::Stroke;
 
 pub fn paint_resize_corner(ui: &Ui, response: &Response) {
     let stroke = ui.style().interact(response).fg_stroke;

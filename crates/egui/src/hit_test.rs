@@ -1,8 +1,7 @@
-use ahash::HashMap;
-
-use emath::TSTransform;
-
 use crate::*;
+use alloc::vec::Vec;
+use emath::TSTransform;
+use hashbrown::HashMap;
 
 /// Result of a hit-test against [`WidgetRects`].
 ///
@@ -39,8 +38,6 @@ pub fn hit_test(
     pos: Pos2,
     search_radius: f32,
 ) -> WidgetHits {
-    crate::profile_function!();
-
     let search_radius_sq = search_radius * search_radius;
 
     // Transform the position into the local coordinate space of each layer:
@@ -325,7 +322,10 @@ fn find_closest(widgets: impl Iterator<Item = WidgetRect>, pos: Pos2) -> Option<
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
+    use alloc::vec;
+    use std::eprintln;
 
     fn wr(id: Id, sense: Sense, rect: Rect) -> WidgetRect {
         WidgetRect {

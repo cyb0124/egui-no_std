@@ -1,11 +1,9 @@
-use std::ops::RangeInclusive;
-use std::sync::Arc;
-
-use emath::*;
-
-use crate::{stroke::PathStroke, text::font::Font, Color32, Mesh, Stroke, Vertex};
-
 use super::{FontsImpl, Galley, Glyph, LayoutJob, LayoutSection, Row, RowVisuals};
+use crate::{stroke::PathStroke, text::font::Font, Color32, Mesh, Stroke, Vertex};
+use alloc::{rc::Rc, vec, vec::Vec};
+use core::ops::RangeInclusive;
+use emath::*;
+use num_traits::Float;
 
 // ----------------------------------------------------------------------------
 
@@ -69,7 +67,7 @@ impl Paragraph {
 ///
 /// In most cases you should use [`crate::Fonts::layout_job`] instead
 /// since that memoizes the input, making subsequent layouting of the same text much faster.
-pub fn layout(fonts: &mut FontsImpl, job: Arc<LayoutJob>) -> Galley {
+pub fn layout(fonts: &mut FontsImpl, job: Rc<LayoutJob>) -> Galley {
     if job.wrap.max_rows == 0 {
         // Early-out: no text
         return Galley {
@@ -571,7 +569,7 @@ fn halign_and_justify_row(
 /// Calculate the Y positions and tessellate the text.
 fn galley_from_rows(
     point_scale: PointScale,
-    job: Arc<LayoutJob>,
+    job: Rc<LayoutJob>,
     mut rows: Vec<Row>,
     elided: bool,
 ) -> Galley {

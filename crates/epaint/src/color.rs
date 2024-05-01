@@ -1,4 +1,4 @@
-use std::{fmt::Debug, sync::Arc};
+use alloc::{fmt::Debug, rc::Rc};
 
 use ecolor::Color32;
 use emath::{Pos2, Rect};
@@ -15,7 +15,7 @@ pub enum ColorMode {
     ///
     /// **This cannot be serialized**
     #[cfg_attr(feature = "serde", serde(skip))]
-    UV(Arc<dyn Fn(Rect, Pos2) -> Color32 + Send + Sync>),
+    UV(Rc<dyn Fn(Rect, Pos2) -> Color32>),
 }
 
 impl Default for ColorMode {
@@ -25,7 +25,7 @@ impl Default for ColorMode {
 }
 
 impl Debug for ColorMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             Self::Solid(arg0) => f.debug_tuple("Solid").field(arg0).finish(),
             Self::UV(_arg0) => f.debug_tuple("UV").field(&"<closure>").finish(),

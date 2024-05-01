@@ -1,5 +1,6 @@
-use crate::{egui_assert, emath::*, Align};
-use std::f32::INFINITY;
+use crate::{egui_assert, emath::*};
+use core::f32::INFINITY;
+use num_traits::Float;
 
 // ----------------------------------------------------------------------------
 
@@ -807,7 +808,7 @@ impl Layout {
         painter: &crate::Painter,
         region: &Region,
         stroke: epaint::Stroke,
-        text: impl ToString,
+        text: impl alloc::string::ToString,
     ) {
         let cursor = region.cursor;
         let next_pos = self.next_widget_position(region);

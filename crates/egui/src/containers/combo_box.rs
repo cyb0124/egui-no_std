@@ -1,6 +1,5 @@
-use epaint::Shape;
-
 use crate::{style::WidgetVisuals, *};
+use alloc::{boxed::Box, vec};
 
 #[allow(unused_imports)] // Documentation
 use crate::style::Spacing;
@@ -45,7 +44,7 @@ pub struct ComboBox {
 
 impl ComboBox {
     /// Create new [`ComboBox`] with id and label
-    pub fn new(id_source: impl std::hash::Hash, label: impl Into<WidgetText>) -> Self {
+    pub fn new(id_source: impl core::hash::Hash, label: impl Into<WidgetText>) -> Self {
         Self {
             id_source: Id::new(id_source),
             label: Some(label.into()),
@@ -72,7 +71,7 @@ impl ComboBox {
     }
 
     /// Without label.
-    pub fn from_id_source(id_source: impl std::hash::Hash) -> Self {
+    pub fn from_id_source(id_source: impl core::hash::Hash) -> Self {
         Self {
             id_source: Id::new(id_source),
             label: Default::default(),

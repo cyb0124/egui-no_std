@@ -1,13 +1,11 @@
 //! Contains items that can be added to a plot.
 #![allow(clippy::type_complexity)] // TODO(emilk): simplify some of the callback types with type aliases
 
-use std::ops::RangeInclusive;
-
-use epaint::{emath::Rot2, Mesh};
-
-use crate::*;
-
 use super::{Cursor, LabelFormatter, PlotBounds, PlotTransform};
+use crate::*;
+use alloc::{borrow::ToOwned, string::ToString};
+use core::ops::RangeInclusive;
+use epaint::{emath::Rot2, Mesh};
 use rect_elem::*;
 
 pub use bar::Bar;
@@ -1282,7 +1280,7 @@ impl PlotItem for Arrows {
             })
             .for_each(|(origin, tip)| {
                 let vector = tip - origin;
-                let rot = Rot2::from_angle(std::f32::consts::TAU / 10.0);
+                let rot = Rot2::from_angle(core::f32::consts::TAU / 10.0);
                 let tip_length = if let Some(tip_length) = tip_length {
                     *tip_length
                 } else {

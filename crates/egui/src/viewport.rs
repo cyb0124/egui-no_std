@@ -67,8 +67,7 @@
 //! There are several more things related to viewports that we want to add.
 //! Read more at <https://github.com/emilk/egui/issues/3556>.
 
-use std::sync::Arc;
-
+use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 use epaint::{Pos2, Vec2};
 
 use crate::{Context, Id};
@@ -120,8 +119,8 @@ impl Default for ViewportId {
     }
 }
 
-impl std::fmt::Debug for ViewportId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for ViewportId {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         self.0.short_debug_format().fmt(f)
     }
 }
@@ -131,7 +130,7 @@ impl ViewportId {
     pub const ROOT: Self = Self(Id::NULL);
 
     #[inline]
-    pub fn from_hash_of(source: impl std::hash::Hash) -> Self {
+    pub fn from_hash_of(source: impl core::hash::Hash) -> Self {
         Self(Id::new(source))
     }
 }
@@ -146,10 +145,12 @@ impl From<ViewportId> for Id {
 impl nohash_hasher::IsEnabled for ViewportId {}
 
 /// A fast hash set of [`ViewportId`].
-pub type ViewportIdSet = nohash_hasher::IntSet<ViewportId>;
+pub type ViewportIdSet =
+    hashbrown::HashSet<ViewportId, nohash_hasher::BuildNoHashHasher<ViewportId>>;
 
 /// A fast hash map from [`ViewportId`] to `T`.
-pub type ViewportIdMap<T> = nohash_hasher::IntMap<ViewportId, T>;
+pub type ViewportIdMap<T> =
+    hashbrown::HashMap<ViewportId, T, nohash_hasher::BuildNoHashHasher<ViewportId>>;
 
 // ----------------------------------------------------------------------------
 
@@ -177,8 +178,8 @@ impl IconData {
     }
 }
 
-impl std::fmt::Debug for IconData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for IconData {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         f.debug_struct("IconData")
             .field("width", &self.width)
             .field("height", &self.height)
@@ -188,7 +189,6 @@ impl std::fmt::Debug for IconData {
 
 impl From<IconData> for epaint::ColorImage {
     fn from(icon: IconData) -> Self {
-        crate::profile_function!();
         let IconData {
             rgba,
             width,
@@ -200,7 +200,6 @@ impl From<IconData> for epaint::ColorImage {
 
 impl From<&IconData> for epaint::ColorImage {
     fn from(icon: &IconData) -> Self {
-        crate::profile_function!();
         let IconData {
             rgba,
             width,
@@ -241,10 +240,7 @@ impl ViewportIdPair {
 }
 
 /// The user-code that shows the ui in the viewport, used for deferred viewports.
-pub type DeferredViewportUiCallback = dyn Fn(&Context) + Sync + Send;
-
-/// Render the given viewport, calling the given ui callback.
-pub type ImmediateViewportRendererCallback = dyn for<'a> Fn(&Context, ImmediateViewport<'a>);
+pub type DeferredViewportUiCallback = dyn Fn(&Context);
 
 /// Control the building of a new egui viewport (i.e. native window).
 ///
@@ -285,7 +281,7 @@ pub struct ViewportBuilder {
     pub resizable: Option<bool>,
     pub transparent: Option<bool>,
     pub decorations: Option<bool>,
-    pub icon: Option<Arc<IconData>>,
+    pub icon: Option<Rc<IconData>>,
     pub active: Option<bool>,
     pub visible: Option<bool>,
 
@@ -391,7 +387,7 @@ impl ViewportBuilder {
     /// The default icon is a white `e` on a black background (for "egui" or "eframe").
     /// If you prefer the OS default, set this to `IconData::default()`.
     #[inline]
-    pub fn with_icon(mut self, icon: impl Into<Arc<IconData>>) -> Self {
+    pub fn with_icon(mut self, icon: impl Into<Rc<IconData>>) -> Self {
         self.icon = Some(icon.into());
         self
     }
@@ -717,7 +713,7 @@ impl ViewportBuilder {
 
         if let Some(new_icon) = new_icon {
             let is_new = match &self.icon {
-                Some(existing) => !Arc::ptr_eq(&new_icon, existing),
+                Some(existing) => !Rc::ptr_eq(&new_icon, existing),
                 None => true,
             };
 
@@ -1016,7 +1012,7 @@ pub enum ViewportCommand {
     WindowLevel(WindowLevel),
 
     /// The window icon.
-    Icon(Option<Arc<IconData>>),
+    Icon(Option<Rc<IconData>>),
 
     /// Set the IME cursor editing area.
     IMERect(crate::Rect),
@@ -1125,7 +1121,7 @@ pub struct ViewportOutput {
     /// The user-code that shows the GUI, used for deferred viewports.
     ///
     /// `None` for immediate viewports and the ROOT viewport.
-    pub viewport_ui_cb: Option<Arc<DeferredViewportUiCallback>>,
+    pub viewport_ui_cb: Option<Rc<DeferredViewportUiCallback>>,
 
     /// Commands to change the viewport, e.g. window title and size.
     pub commands: Vec<ViewportCommand>,
@@ -1136,7 +1132,7 @@ pub struct ViewportOutput {
     /// but if you haven't, you can use this instead.
     ///
     /// If the duration is zero, schedule a repaint immediately.
-    pub repaint_delay: std::time::Duration,
+    pub repaint_delay: core::time::Duration,
 }
 
 impl ViewportOutput {

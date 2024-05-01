@@ -2,7 +2,7 @@ use super::*;
 
 #[derive(Default)]
 pub struct DefaultTextureLoader {
-    cache: Mutex<HashMap<(String, TextureOptions), TextureHandle>>,
+    cache: RefCell<HashMap<(String, TextureOptions), TextureHandle>>,
 }
 
 impl TextureLoader for DefaultTextureLoader {
@@ -17,7 +17,7 @@ impl TextureLoader for DefaultTextureLoader {
         texture_options: TextureOptions,
         size_hint: SizeHint,
     ) -> TextureLoadResult {
-        let mut cache = self.cache.lock();
+        let mut cache = self.cache.borrow_mut();
         if let Some(handle) = cache.get(&(uri.into(), texture_options)) {
             let texture = SizedTexture::from_handle(handle);
             Ok(TexturePoll::Ready { texture })
@@ -35,24 +35,18 @@ impl TextureLoader for DefaultTextureLoader {
     }
 
     fn forget(&self, uri: &str) {
-        #[cfg(feature = "log")]
-        log::trace!("forget {uri:?}");
-
-        self.cache.lock().retain(|(u, _), _| u != uri);
+        self.cache.borrow_mut().retain(|(u, _), _| u != uri);
     }
 
     fn forget_all(&self) {
-        #[cfg(feature = "log")]
-        log::trace!("forget all");
-
-        self.cache.lock().clear();
+        self.cache.borrow_mut().clear();
     }
 
     fn end_frame(&self, _: usize) {}
 
     fn byte_size(&self) -> usize {
         self.cache
-            .lock()
+            .borrow()
             .values()
             .map(|texture| texture.byte_size())
             .sum()

@@ -49,9 +49,9 @@ impl CursorRange {
     }
 
     /// The range of selected character indices.
-    pub fn as_sorted_char_range(&self) -> std::ops::Range<usize> {
+    pub fn as_sorted_char_range(&self) -> core::ops::Range<usize> {
         let [start, end] = self.sorted_cursors();
-        std::ops::Range {
+        core::ops::Range {
             start: start.ccursor.index,
             end: end.ccursor.index,
         }
@@ -179,29 +179,6 @@ impl CursorRange {
                 pressed: true,
                 ..
             } => self.on_key_press(os, galley, modifiers, *key),
-
-            #[cfg(feature = "accesskit")]
-            Event::AccessKitActionRequest(accesskit::ActionRequest {
-                action: accesskit::Action::SetTextSelection,
-                target,
-                data: Some(accesskit::ActionData::SetTextSelection(selection)),
-            }) => {
-                if _widget_id.accesskit_id() == *target {
-                    let primary =
-                        ccursor_from_accesskit_text_position(_widget_id, galley, &selection.focus);
-                    let secondary =
-                        ccursor_from_accesskit_text_position(_widget_id, galley, &selection.anchor);
-                    if let (Some(primary), Some(secondary)) = (primary, secondary) {
-                        *self = Self {
-                            primary: galley.from_ccursor(primary),
-                            secondary: galley.from_ccursor(secondary),
-                        };
-                        return true;
-                    }
-                }
-                false
-            }
-
             _ => false,
         }
     }
@@ -270,30 +247,6 @@ pub struct PCursorRange {
     /// When selecting with a mouse, this is where the mouse was first pressed.
     /// This part of the cursor does not move when shift is down.
     pub secondary: PCursor,
-}
-
-// ----------------------------------------------------------------------------
-
-#[cfg(feature = "accesskit")]
-fn ccursor_from_accesskit_text_position(
-    id: Id,
-    galley: &Galley,
-    position: &accesskit::TextPosition,
-) -> Option<CCursor> {
-    let mut total_length = 0usize;
-    for (i, row) in galley.rows.iter().enumerate() {
-        let row_id = id.with(i);
-        if row_id.accesskit_id() == position.node {
-            return Some(CCursor {
-                index: total_length + position.character_index,
-                prefer_next_row: !(position.character_index == row.glyphs.len()
-                    && !row.ends_with_newline
-                    && (i + 1) < galley.rows.len()),
-            });
-        }
-        total_length += row.glyphs.len() + (row.ends_with_newline as usize);
-    }
-    None
 }
 
 // ----------------------------------------------------------------------------

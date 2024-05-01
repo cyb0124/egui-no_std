@@ -1,3 +1,5 @@
+use alloc::string::{String, ToString};
+use alloc::{vec, vec::Vec};
 use egui::emath::NumExt;
 use egui::epaint::{Color32, RectShape, Rounding, Shape, Stroke};
 

@@ -1,4 +1,5 @@
 use super::*;
+use num_traits::Float;
 
 /// The color and fuzziness of a fuzzy shape.
 ///

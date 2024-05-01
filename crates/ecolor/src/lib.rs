@@ -8,7 +8,10 @@
 #![cfg_attr(feature = "document-features", doc = document_features::document_features!())]
 //!
 
+#![no_std]
 #![allow(clippy::wrong_self_convention)]
+extern crate alloc;
+use num_traits::Float;
 
 #[cfg(feature = "cint")]
 mod cint_impl;

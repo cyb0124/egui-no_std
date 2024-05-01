@@ -1,12 +1,12 @@
 #![allow(clippy::derived_hash_with_manual_eq)] // We need to impl Hash for f32, but we don't implement Eq, which is fine
 #![allow(clippy::wrong_self_convention)] // We use `from_` to indicate conversion direction. It's non-diomatic, but makes sense in this context.
 
-use std::ops::Range;
-use std::sync::Arc;
-
 use super::{cursor::*, font::UvRect};
 use crate::{Color32, FontId, Mesh, Stroke};
+use alloc::{rc::Rc, string::String, vec, vec::Vec};
+use core::ops::Range;
 use emath::*;
+use num_traits::Float;
 
 /// Describes the task of laying out text.
 ///
@@ -169,9 +169,9 @@ impl LayoutJob {
     }
 }
 
-impl std::hash::Hash for LayoutJob {
+impl core::hash::Hash for LayoutJob {
     #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let Self {
             text,
             sections,
@@ -206,9 +206,9 @@ pub struct LayoutSection {
     pub format: TextFormat,
 }
 
-impl std::hash::Hash for LayoutSection {
+impl core::hash::Hash for LayoutSection {
     #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let Self {
             leading_space,
             byte_range,
@@ -278,9 +278,9 @@ impl Default for TextFormat {
     }
 }
 
-impl std::hash::Hash for TextFormat {
+impl core::hash::Hash for TextFormat {
     #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let Self {
             font_id,
             extra_letter_spacing,
@@ -366,9 +366,9 @@ pub struct TextWrapping {
     pub overflow_character: Option<char>,
 }
 
-impl std::hash::Hash for TextWrapping {
+impl core::hash::Hash for TextWrapping {
     #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let Self {
             max_width,
             max_rows,
@@ -434,7 +434,7 @@ impl TextWrapping {
 pub struct Galley {
     /// The job that this galley is the result of.
     /// Contains the original string and style sections.
-    pub job: Arc<LayoutJob>,
+    pub job: Rc<LayoutJob>,
 
     /// Rows of text, from top to bottom.
     ///
@@ -645,14 +645,14 @@ impl AsRef<str> for Galley {
     }
 }
 
-impl std::borrow::Borrow<str> for Galley {
+impl core::borrow::Borrow<str> for Galley {
     #[inline]
     fn borrow(&self) -> &str {
         self.text()
     }
 }
 
-impl std::ops::Deref for Galley {
+impl core::ops::Deref for Galley {
     type Target = str;
     #[inline]
     fn deref(&self) -> &str {

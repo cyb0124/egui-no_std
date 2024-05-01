@@ -55,21 +55,21 @@
 mod bytes_loader;
 mod texture_loader;
 
-use std::{
+pub use self::{bytes_loader::DefaultBytesLoader, texture_loader::DefaultTextureLoader};
+use crate::Context;
+use alloc::{
     borrow::Cow,
     fmt::{Debug, Display},
-    ops::Deref,
-    sync::Arc,
+    rc::Rc,
+    string::String,
+    vec,
+    vec::Vec,
 };
-
-use ahash::HashMap;
-
+use core::{cell::RefCell, ops::Deref};
 use emath::{Float, OrderedFloat};
-use epaint::{mutex::Mutex, textures::TextureOptions, ColorImage, TextureHandle, TextureId, Vec2};
-
-use crate::Context;
-
-pub use self::{bytes_loader::DefaultBytesLoader, texture_loader::DefaultTextureLoader};
+use epaint::{textures::TextureOptions, ColorImage, TextureHandle, TextureId, Vec2};
+use hashbrown::HashMap;
+use num_traits::Float as _;
 
 /// Represents a failed attempt at loading an image.
 #[derive(Clone, Debug)]
@@ -97,7 +97,7 @@ pub enum LoadError {
 }
 
 impl Display for LoadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             Self::NoImageLoaders => f.write_str(
                 "No image loaders are installed. If you're trying to load some images \
@@ -116,9 +116,7 @@ impl Display for LoadError {
     }
 }
 
-impl std::error::Error for LoadError {}
-
-pub type Result<T, E = LoadError> = std::result::Result<T, E>;
+pub type Result<T, E = LoadError> = core::result::Result<T, E>;
 
 /// Given as a hint for image loading requests.
 ///
@@ -160,11 +158,11 @@ impl From<Vec2> for SizeHint {
 #[derive(Clone)]
 pub enum Bytes {
     Static(&'static [u8]),
-    Shared(Arc<[u8]>),
+    Shared(Rc<[u8]>),
 }
 
 impl Debug for Bytes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             Self::Static(arg0) => f.debug_tuple("Static").field(&arg0.len()).finish(),
             Self::Shared(arg0) => f.debug_tuple("Shared").field(&arg0.len()).finish(),
@@ -186,9 +184,9 @@ impl<const N: usize> From<&'static [u8; N]> for Bytes {
     }
 }
 
-impl From<Arc<[u8]>> for Bytes {
+impl From<Rc<[u8]>> for Bytes {
     #[inline]
-    fn from(value: Arc<[u8]>) -> Self {
+    fn from(value: Rc<[u8]>) -> Self {
         Self::Shared(value)
     }
 }
@@ -323,7 +321,7 @@ pub enum ImagePoll {
     },
 
     /// Image is loaded.
-    Ready { image: Arc<ColorImage> },
+    Ready { image: Rc<ColorImage> },
 }
 
 pub type ImageLoadResult = Result<ImagePoll>;
@@ -514,27 +512,27 @@ pub trait TextureLoader {
     fn byte_size(&self) -> usize;
 }
 
-type BytesLoaderImpl = Arc<dyn BytesLoader + Send + Sync + 'static>;
-type ImageLoaderImpl = Arc<dyn ImageLoader + Send + Sync + 'static>;
-type TextureLoaderImpl = Arc<dyn TextureLoader + Send + Sync + 'static>;
+type BytesLoaderImpl = Rc<dyn BytesLoader + 'static>;
+type ImageLoaderImpl = Rc<dyn ImageLoader + 'static>;
+type TextureLoaderImpl = Rc<dyn TextureLoader + 'static>;
 
 #[derive(Clone)]
 /// The loaders of bytes, images, and textures.
 pub struct Loaders {
-    pub include: Arc<DefaultBytesLoader>,
-    pub bytes: Mutex<Vec<BytesLoaderImpl>>,
-    pub image: Mutex<Vec<ImageLoaderImpl>>,
-    pub texture: Mutex<Vec<TextureLoaderImpl>>,
+    pub include: Rc<DefaultBytesLoader>,
+    pub bytes: RefCell<Vec<BytesLoaderImpl>>,
+    pub image: RefCell<Vec<ImageLoaderImpl>>,
+    pub texture: RefCell<Vec<TextureLoaderImpl>>,
 }
 
 impl Default for Loaders {
     fn default() -> Self {
-        let include = Arc::new(DefaultBytesLoader::default());
+        let include = Rc::new(DefaultBytesLoader::default());
         Self {
-            bytes: Mutex::new(vec![include.clone()]),
-            image: Mutex::new(Vec::new()),
+            bytes: RefCell::new(vec![include.clone()]),
+            image: RefCell::new(Vec::new()),
             // By default we only include `DefaultTextureLoader`.
-            texture: Mutex::new(vec![Arc::new(DefaultTextureLoader::default())]),
+            texture: RefCell::new(vec![Rc::new(DefaultTextureLoader::default())]),
             include,
         }
     }

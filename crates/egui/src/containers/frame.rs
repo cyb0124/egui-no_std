@@ -1,6 +1,7 @@
 //! Frame container
 
 use crate::{layers::ShapeIdx, *};
+use alloc::{boxed::Box, vec};
 use epaint::*;
 
 /// Add a background, frame and/or margin to a rectangular background of a [`Ui`].

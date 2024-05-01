@@ -1,8 +1,7 @@
-use std::collections::BTreeMap;
-
-use egui::{ahash, Context, Id, Pos2, Vec2b};
-
 use crate::{PlotBounds, PlotTransform};
+use alloc::{collections::BTreeMap, string::String};
+use egui::{Context, Id, Pos2, Vec2b};
+use hashbrown::HashSet;
 
 /// Information about the plot that has to persist between frames.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -18,7 +17,7 @@ pub struct PlotMemory {
     pub hovered_legend_item: Option<String>,
 
     /// Which items _not_ to show?
-    pub hidden_items: ahash::HashSet<String>,
+    pub hidden_items: HashSet<String>,
 
     /// The transform from last frame.
     pub(crate) transform: PlotTransform,

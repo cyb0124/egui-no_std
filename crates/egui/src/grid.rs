@@ -1,4 +1,5 @@
 use crate::*;
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct State {
@@ -51,7 +52,7 @@ type ColorPickerFn = Box<dyn Send + Sync + Fn(usize, &Style) -> Option<Color32>>
 
 pub(crate) struct GridLayout {
     ctx: Context,
-    style: std::sync::Arc<Style>,
+    style: Rc<Style>,
     id: Id,
 
     /// First frame (no previous know state).
@@ -305,7 +306,7 @@ pub struct Grid {
 
 impl Grid {
     /// Create a new [`Grid`] with a locally unique identifier.
-    pub fn new(id_source: impl std::hash::Hash) -> Self {
+    pub fn new(id_source: impl core::hash::Hash) -> Self {
         Self {
             id_source: Id::new(id_source),
             num_columns: None,

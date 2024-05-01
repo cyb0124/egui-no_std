@@ -1,10 +1,10 @@
-use std::{collections::BTreeMap, fmt::Debug};
-
 use crate::{
     data::input::TouchDeviceId,
     emath::{normalized_angle, Pos2, Vec2},
     Event, RawInput, TouchId, TouchPhase,
 };
+use alloc::{collections::BTreeMap, fmt::Debug, format};
+use num_traits::Float;
 
 /// All you probably need to know about a multi-touch gesture.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -298,7 +298,7 @@ impl TouchState {
 
 impl Debug for TouchState {
     // This outputs less clutter than `#[derive(Debug)]`:
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         for (id, touch) in &self.active_touches {
             f.write_fmt(format_args!("#{id:?}: {touch:#?}\n"))?;
         }

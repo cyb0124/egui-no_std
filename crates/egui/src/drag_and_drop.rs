@@ -1,6 +1,7 @@
-use std::{any::Any, sync::Arc};
+use alloc::rc::Rc;
 
 use crate::{Context, CursorIcon, Id};
+use core::any::Any;
 
 /// Tracking of drag-and-drop payload.
 ///
@@ -18,12 +19,12 @@ use crate::{Context, CursorIcon, Id};
 #[derive(Clone, Default)]
 pub struct DragAndDrop {
     /// If set, something is currently being dragged
-    payload: Option<Arc<dyn Any + Send + Sync>>,
+    payload: Option<Rc<dyn Any>>,
 }
 
 impl DragAndDrop {
     pub(crate) fn register(ctx: &Context) {
-        ctx.on_end_frame("debug_text", std::sync::Arc::new(Self::end_frame));
+        ctx.on_end_frame("debug_text", Rc::new(Self::end_frame));
     }
 
     fn end_frame(ctx: &Context) {
@@ -51,11 +52,11 @@ impl DragAndDrop {
     /// This can be read by [`Self::payload`] until the pointer is released.
     pub fn set_payload<Payload>(ctx: &Context, payload: Payload)
     where
-        Payload: Any + Send + Sync,
+        Payload: Any,
     {
         ctx.data_mut(|data| {
             let state = data.get_temp_mut_or_default::<Self>(Id::NULL);
-            state.payload = Some(Arc::new(payload));
+            state.payload = Some(Rc::new(payload));
         });
     }
 
@@ -73,9 +74,9 @@ impl DragAndDrop {
     ///
     /// Returns `Some` both during a drag and on the frame the pointer is released
     /// (if there is a payload).
-    pub fn payload<Payload>(ctx: &Context) -> Option<Arc<Payload>>
+    pub fn payload<Payload>(ctx: &Context) -> Option<Rc<Payload>>
     where
-        Payload: Any + Send + Sync,
+        Payload: Any,
     {
         ctx.data(|data| {
             let state = data.get_temp::<Self>(Id::NULL)?;
@@ -90,9 +91,9 @@ impl DragAndDrop {
     ///
     /// Returns `Some` both during a drag and on the frame the pointer is released
     /// (if there is a payload).
-    pub fn take_payload<Payload>(ctx: &Context) -> Option<Arc<Payload>>
+    pub fn take_payload<Payload>(ctx: &Context) -> Option<Rc<Payload>>
     where
-        Payload: Any + Send + Sync,
+        Payload: Any,
     {
         ctx.data_mut(|data| {
             let state = data.get_temp_mut_or_default::<Self>(Id::NULL);
@@ -107,7 +108,7 @@ impl DragAndDrop {
     /// (if there is a payload).
     pub fn has_payload_of_type<Payload>(ctx: &Context) -> bool
     where
-        Payload: Any + Send + Sync,
+        Payload: Any,
     {
         Self::payload::<Payload>(ctx).is_some()
     }

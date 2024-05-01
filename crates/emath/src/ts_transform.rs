@@ -33,7 +33,7 @@ impl TSTransform {
 
     #[inline]
     /// Creates a new translation that first scales points around
-    /// `(0, 0)`, then translates them.  
+    /// `(0, 0)`, then translates them.
     pub fn new(translation: Vec2, scaling: f32) -> Self {
         Self {
             translation,
@@ -104,7 +104,7 @@ impl TSTransform {
 }
 
 /// Transforms the position.
-impl std::ops::Mul<Pos2> for TSTransform {
+impl core::ops::Mul<Pos2> for TSTransform {
     type Output = Pos2;
 
     #[inline]
@@ -114,7 +114,7 @@ impl std::ops::Mul<Pos2> for TSTransform {
 }
 
 /// Transforms the rectangle.
-impl std::ops::Mul<Rect> for TSTransform {
+impl core::ops::Mul<Rect> for TSTransform {
     type Output = Rect;
 
     #[inline]
@@ -123,7 +123,7 @@ impl std::ops::Mul<Rect> for TSTransform {
     }
 }
 
-impl std::ops::Mul<Self> for TSTransform {
+impl core::ops::Mul<Self> for TSTransform {
     type Output = Self;
 
     #[inline]

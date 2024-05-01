@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use alloc::{borrow::Cow, rc::Rc, string::String};
 
 use crate::{
     text::LayoutJob, Align, Color32, FontFamily, FontSelection, Galley, Style, TextStyle, Ui,
@@ -454,7 +454,7 @@ pub enum WidgetText {
     ///
     /// You can color the text however you want, or use [`Color32::PLACEHOLDER`]
     /// which will be replaced with a color chosen by the widget that paints the text.
-    Galley(Arc<Galley>),
+    Galley(Rc<Galley>),
 }
 
 impl Default for WidgetText {
@@ -647,7 +647,7 @@ impl WidgetText {
         wrap: Option<bool>,
         available_width: f32,
         fallback_font: impl Into<FontSelection>,
-    ) -> Arc<Galley> {
+    ) -> Rc<Galley> {
         let wrap = wrap.unwrap_or_else(|| ui.wrap_text());
         let valign = ui.layout().vertical_align();
         let style = ui.style();
@@ -670,7 +670,7 @@ impl WidgetText {
         available_width: f32,
         fallback_font: FontSelection,
         default_valign: Align,
-    ) -> Arc<Galley> {
+    ) -> Rc<Galley> {
         let wrap_width = if wrap { available_width } else { f32::INFINITY };
 
         match self {
@@ -730,9 +730,9 @@ impl From<LayoutJob> for WidgetText {
     }
 }
 
-impl From<Arc<Galley>> for WidgetText {
+impl From<Rc<Galley>> for WidgetText {
     #[inline]
-    fn from(galley: Arc<Galley>) -> Self {
+    fn from(galley: Rc<Galley>) -> Self {
         Self::Galley(galley)
     }
 }

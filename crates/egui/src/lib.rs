@@ -369,10 +369,12 @@
 //! The default egui fonts only support latin and cryllic characters, and some emojis.
 //! To use egui with e.g. asian characters you need to install your own font (`.ttf` or `.otf`) using [`Context::set_fonts`].
 
+#![no_std]
 #![allow(clippy::float_cmp)]
 #![allow(clippy::manual_range_contains)]
-#![cfg_attr(feature = "puffin", deny(unsafe_code))]
-#![cfg_attr(not(feature = "puffin"), forbid(unsafe_code))]
+#![forbid(unsafe_code)]
+
+extern crate alloc;
 
 mod animation_manager;
 pub mod containers;
@@ -406,16 +408,6 @@ pub mod viewport;
 mod widget_rect;
 pub mod widget_text;
 pub mod widgets;
-
-#[cfg(feature = "callstack")]
-#[cfg(debug_assertions)]
-mod callstack;
-
-#[cfg(feature = "accesskit")]
-pub use accesskit;
-
-pub use ahash;
-
 pub use epaint;
 pub use epaint::ecolor;
 pub use epaint::emath;
@@ -427,7 +419,6 @@ pub use emath::{
     lerp, pos2, remap, remap_clamp, vec2, Align, Align2, NumExt, Pos2, Rangef, Rect, Vec2, Vec2b,
 };
 pub use epaint::{
-    mutex,
     text::{FontData, FontDefinitions, FontFamily, FontId, FontTweak},
     textures::{TextureFilter, TextureOptions, TextureWrapMode, TexturesDelta},
     ClippedPrimitive, ColorImage, FontImage, ImageData, Margin, Mesh, PaintCallback,
@@ -672,38 +663,3 @@ pub fn __run_test_ui(mut add_contents: impl FnMut(&mut Ui)) {
         });
     });
 }
-
-#[cfg(feature = "accesskit")]
-pub fn accesskit_root_id() -> Id {
-    Id::new("accesskit_root")
-}
-
-// ---------------------------------------------------------------------------
-
-mod profiling_scopes {
-    #![allow(unused_macros)]
-    #![allow(unused_imports)]
-
-    /// Profiling macro for feature "puffin"
-    macro_rules! profile_function {
-        ($($arg: tt)*) => {
-            #[cfg(feature = "puffin")]
-            #[cfg(not(target_arch = "wasm32"))] // Disabled on web because of the coarse 1ms clock resolution there.
-            puffin::profile_function!($($arg)*);
-        };
-    }
-    pub(crate) use profile_function;
-
-    /// Profiling macro for feature "puffin"
-    macro_rules! profile_scope {
-        ($($arg: tt)*) => {
-            #[cfg(feature = "puffin")]
-            #[cfg(not(target_arch = "wasm32"))] // Disabled on web because of the coarse 1ms clock resolution there.
-            puffin::profile_scope!($($arg)*);
-        };
-    }
-    pub(crate) use profile_scope;
-}
-
-#[allow(unused_imports)]
-pub(crate) use profiling_scopes::*;

@@ -3,9 +3,12 @@
 //! Supports the 3, 4, 6, and 8-digit formats, according to the specification in
 //! <https://drafts.csswg.org/css-color-4/#hex-color>
 
-use std::{fmt::Display, str::FromStr};
-
 use crate::Color32;
+use alloc::{
+    fmt::Display,
+    str::FromStr,
+    string::{String, ToString},
+};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -31,7 +34,7 @@ pub enum HexColor {
 pub enum ParseHexColorError {
     MissingHash,
     InvalidLength,
-    InvalidInt(std::num::ParseIntError),
+    InvalidInt(core::num::ParseIntError),
 }
 
 impl FromStr for HexColor {
@@ -45,7 +48,7 @@ impl FromStr for HexColor {
 }
 
 impl Display for HexColor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             Self::Hex3(color) => {
                 let [r, g, b, _] = color.to_srgba_unmultiplied().map(|u| u >> 4);

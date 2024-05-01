@@ -1,7 +1,3 @@
-use std::sync::Arc;
-
-use epaint::text::{cursor::*, Galley, LayoutJob};
-
 use crate::{
     os::OperatingSystem,
     output::OutputEvent,
@@ -10,6 +6,8 @@ use crate::{
     },
     *,
 };
+use alloc::{borrow::ToOwned, rc::Rc, string::String};
+use epaint::text::{cursor::*, LayoutJob};
 
 use super::{TextEditOutput, TextEditState};
 
@@ -64,7 +62,7 @@ pub struct TextEdit<'t> {
     id_source: Option<Id>,
     font_selection: FontSelection,
     text_color: Option<Color32>,
-    layouter: Option<&'t mut dyn FnMut(&Ui, &str, f32) -> Arc<Galley>>,
+    layouter: Option<&'t mut dyn FnMut(&Ui, &str, f32) -> Rc<Galley>>,
     password: bool,
     frame: bool,
     margin: Margin,
@@ -156,7 +154,7 @@ impl<'t> TextEdit<'t> {
 
     /// A source for the unique [`Id`], e.g. `.id_source("second_text_edit_field")` or `.id_source(loop_index)`.
     #[inline]
-    pub fn id_source(mut self, id_source: impl std::hash::Hash) -> Self {
+    pub fn id_source(mut self, id_source: impl core::hash::Hash) -> Self {
         self.id_source = Some(Id::new(id_source));
         self
     }
@@ -239,7 +237,7 @@ impl<'t> TextEdit<'t> {
     /// # });
     /// ```
     #[inline]
-    pub fn layouter(mut self, layouter: &'t mut dyn FnMut(&Ui, &str, f32) -> Arc<Galley>) -> Self {
+    pub fn layouter(mut self, layouter: &'t mut dyn FnMut(&Ui, &str, f32) -> Rc<Galley>) -> Self {
         self.layouter = Some(layouter);
 
         self
@@ -743,26 +741,6 @@ impl<'t> TextEdit<'t> {
             });
         }
 
-        #[cfg(feature = "accesskit")]
-        {
-            let role = if password {
-                accesskit::Role::PasswordInput
-            } else if multiline {
-                accesskit::Role::MultilineTextInput
-            } else {
-                accesskit::Role::TextInput
-            };
-
-            crate::text_selection::accesskit_text::update_accesskit_for_text_widget(
-                ui.ctx(),
-                id,
-                cursor_range,
-                role,
-                galley_pos,
-                &galley,
-            );
-        }
-
         TextEditOutput {
             response,
             galley,
@@ -776,7 +754,7 @@ impl<'t> TextEdit<'t> {
 
 fn mask_if_password(is_password: bool, text: &str) -> String {
     fn mask_password(text: &str) -> String {
-        std::iter::repeat(epaint::text::PASSWORD_REPLACEMENT_CHAR)
+        core::iter::repeat(epaint::text::PASSWORD_REPLACEMENT_CHAR)
             .take(text.chars().count())
             .collect::<String>()
     }
@@ -796,8 +774,8 @@ fn events(
     ui: &crate::Ui,
     state: &mut TextEditState,
     text: &mut dyn TextBuffer,
-    galley: &mut Arc<Galley>,
-    layouter: &mut dyn FnMut(&Ui, &str, f32) -> Arc<Galley>,
+    galley: &mut Rc<Galley>,
+    layouter: &mut dyn FnMut(&Ui, &str, f32) -> Rc<Galley>,
     id: Id,
     wrap_width: f32,
     multiline: bool,
@@ -813,7 +791,7 @@ fn events(
 
     // We feed state to the undoer both before and after handling input
     // so that the undoer creates automatic saves even when there are no events for a while.
-    state.undoer.lock().feed_state(
+    state.undoer.borrow_mut().feed_state(
         ui.input(|i| i.time),
         &(cursor_range.as_ccursor_range(), text.as_str().to_owned()),
     );
@@ -913,7 +891,7 @@ fn events(
             } if modifiers.matches_logically(Modifiers::COMMAND) => {
                 if let Some((undo_ccursor_range, undo_txt)) = state
                     .undoer
-                    .lock()
+                    .borrow_mut()
                     .undo(&(cursor_range.as_ccursor_range(), text.as_str().to_owned()))
                 {
                     text.replace_with(undo_txt);
@@ -933,7 +911,7 @@ fn events(
             {
                 if let Some((redo_ccursor_range, redo_txt)) = state
                     .undoer
-                    .lock()
+                    .borrow_mut()
                     .redo(&(cursor_range.as_ccursor_range(), text.as_str().to_owned()))
                 {
                     text.replace_with(redo_txt);
@@ -1015,7 +993,7 @@ fn events(
 
     state.cursor.set_range(Some(cursor_range));
 
-    state.undoer.lock().feed_state(
+    state.undoer.borrow_mut().feed_state(
         ui.input(|i| i.time),
         &(cursor_range.as_ccursor_range(), text.as_str().to_owned()),
     );

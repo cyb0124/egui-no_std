@@ -1,8 +1,11 @@
-use std::{collections::BTreeMap, string::String};
-
-use crate::*;
-
 use super::items::PlotItem;
+use crate::*;
+use alloc::{
+    borrow::ToOwned,
+    collections::BTreeMap,
+    string::{String, ToString},
+};
+use hashbrown::HashSet;
 
 /// Where to place the plot legend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +37,7 @@ pub struct Legend {
     pub position: Corner,
 
     /// Used for overriding the `hidden_items` set in [`LegendWidget`].
-    hidden_items: Option<ahash::HashSet<String>>,
+    hidden_items: Option<HashSet<String>>,
 }
 
 impl Default for Legend {
@@ -183,7 +186,7 @@ impl LegendWidget {
         rect: Rect,
         config: Legend,
         items: &[Box<dyn PlotItem>],
-        hidden_items: &ahash::HashSet<String>, // Existing hiddent items in the plot memory.
+        hidden_items: &HashSet<String>, // Existing hiddent items in the plot memory.
     ) -> Option<Self> {
         // If `config.hidden_items` is not `None`, it is used.
         let hidden_items = config.hidden_items.as_ref().unwrap_or(hidden_items);
@@ -217,7 +220,7 @@ impl LegendWidget {
     }
 
     // Get the names of the hidden items.
-    pub fn hidden_items(&self) -> ahash::HashSet<String> {
+    pub fn hidden_items(&self) -> HashSet<String> {
         self.entries
             .iter()
             .filter(|(_, entry)| !entry.checked)

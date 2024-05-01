@@ -1,8 +1,8 @@
 //! Total order on floating point types.
 //! Can be used for sorting, min/max computation, and other collection algorithms.
 
-use std::cmp::Ordering;
-use std::hash::{Hash, Hasher};
+use core::cmp::Ordering;
+use core::hash::{Hash, Hasher};
 
 /// Wraps a floating-point value to add total order and hash.
 /// Possible types for `T` are `f32` and `f64`.

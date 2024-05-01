@@ -1,27 +1,28 @@
 #![warn(missing_docs)] // Let's keep `Context` well-documented.
 
-use std::{borrow::Cow, cell::RefCell, panic::Location, sync::Arc, time::Duration};
-
-use epaint::{
-    emath::TSTransform, mutex::*, stats::*, text::Fonts, util::OrderedFloat, TessellationOptions, *,
-};
-
+use self::{hit_test::WidgetHits, interaction::InteractionSnapshot};
 use crate::{
     animation_manager::AnimationManager,
-    data::output::PlatformOutput,
     frame_state::FrameState,
     input_state::*,
     layers::GraphicLayers,
     load::{Bytes, Loaders, SizedTexture},
-    memory::Options,
     os::OperatingSystem,
-    output::FullOutput,
     util::IdTypeMap,
-    viewport::ViewportClass,
-    TextureHandle, ViewportCommand, *,
+    *,
 };
-
-use self::{hit_test::WidgetHits, interaction::InteractionSnapshot};
+use alloc::{
+    borrow::Cow,
+    boxed::Box,
+    format,
+    rc::Rc,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::{cell::RefCell, panic::Location, time::Duration};
+use epaint::{emath::TSTransform, stats::*, util::OrderedFloat, *};
+use num_traits::Float;
 
 /// Information given to the backend about when it is time to repaint the ui.
 ///
@@ -43,13 +44,7 @@ pub struct RequestRepaintInfo {
 
 // ----------------------------------------------------------------------------
 
-thread_local! {
-    static IMMEDIATE_VIEWPORT_RENDERER: RefCell<Option<Box<ImmediateViewportRendererCallback>>> = Default::default();
-}
-
-// ----------------------------------------------------------------------------
-
-struct WrappedTextureManager(Arc<RwLock<epaint::TextureManager>>);
+struct WrappedTextureManager(Rc<RefCell<epaint::TextureManager>>);
 
 impl Default for WrappedTextureManager {
     fn default() -> Self {
@@ -63,14 +58,14 @@ impl Default for WrappedTextureManager {
         );
         assert_eq!(font_id, TextureId::default());
 
-        Self(Arc::new(RwLock::new(tex_mngr)))
+        Self(Rc::new(RefCell::new(tex_mngr)))
     }
 }
 
 // ----------------------------------------------------------------------------
 
 /// Generic event callback.
-pub type ContextCallback = Arc<dyn Fn(&Context) + Send + Sync>;
+pub type ContextCallback = Rc<dyn Fn(&Context)>;
 
 #[derive(Clone)]
 struct NamedContextCallback {
@@ -87,13 +82,11 @@ struct Plugins {
 
 impl Plugins {
     fn call(ctx: &Context, _cb_name: &str, callbacks: &[NamedContextCallback]) {
-        crate::profile_scope!("plugins", _cb_name);
         for NamedContextCallback {
             debug_name: _name,
             callback,
         } in callbacks
         {
-            crate::profile_scope!("plugin", _name);
             (callback)(ctx);
         }
     }
@@ -115,7 +108,7 @@ impl ContextImpl {
     fn begin_frame_repaint_logic(&mut self, viewport_id: ViewportId) {
         let viewport = self.viewports.entry(viewport_id).or_default();
 
-        std::mem::swap(
+        core::mem::swap(
             &mut viewport.repaint.prev_causes,
             &mut viewport.repaint.causes,
         );
@@ -212,7 +205,7 @@ struct ViewportState {
     /// The user-code that shows the GUI, used for deferred viewports.
     ///
     /// `None` for immediate viewports.
-    viewport_ui_cb: Option<Arc<DeferredViewportUiCallback>>,
+    viewport_ui_cb: Option<Rc<DeferredViewportUiCallback>>,
 
     input: InputState,
 
@@ -261,8 +254,8 @@ pub struct RepaintCause {
     pub line: u32,
 }
 
-impl std::fmt::Debug for RepaintCause {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for RepaintCause {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         write!(f, "{}:{}", self.file, self.line)
     }
 }
@@ -280,8 +273,8 @@ impl RepaintCause {
     }
 }
 
-impl std::fmt::Display for RepaintCause {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Display for RepaintCause {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         write!(f, "{}:{}", self.file, self.line)
     }
 }
@@ -350,7 +343,7 @@ struct ContextImpl {
     /// `pixels_per_point`.
     /// This is because the `Fonts` depend on `pixels_per_point` for the font atlas
     /// as well as kerning, font sizes, etc.
-    fonts: std::collections::BTreeMap<OrderedFloat<f32>, Fonts>,
+    fonts: alloc::collections::BTreeMap<OrderedFloat<f32>, Fonts>,
     font_definitions: FontDefinitions,
 
     memory: Memory,
@@ -379,19 +372,13 @@ struct ContextImpl {
 
     paint_stats: PaintStats,
 
-    request_repaint_callback: Option<Box<dyn Fn(RequestRepaintInfo) + Send + Sync>>,
+    request_repaint_callback: Option<Box<dyn Fn(RequestRepaintInfo)>>,
 
     viewport_parents: ViewportIdMap<ViewportId>,
     viewports: ViewportIdMap<ViewportState>,
 
     embed_viewports: bool,
-
-    #[cfg(feature = "accesskit")]
-    is_accesskit_enabled: bool,
-    #[cfg(feature = "accesskit")]
-    accesskit_node_classes: accesskit::NodeClassSet,
-
-    loaders: Arc<Loaders>,
+    loaders: Rc<Loaders>,
 }
 
 impl ContextImpl {
@@ -438,7 +425,7 @@ impl ContextImpl {
 
         self.memory.begin_frame(&new_raw_input, &all_viewport_ids);
 
-        viewport.input = std::mem::take(&mut viewport.input).begin_frame(
+        viewport.input = core::mem::take(&mut viewport.input).begin_frame(
             new_raw_input,
             viewport.repaint.requested_immediate_repaint_prev_frame(),
             pixels_per_point,
@@ -497,29 +484,11 @@ impl ContextImpl {
             },
         );
 
-        #[cfg(feature = "accesskit")]
-        if self.is_accesskit_enabled {
-            crate::profile_scope!("accesskit");
-            use crate::frame_state::AccessKitFrameState;
-            let id = crate::accesskit_root_id();
-            let mut builder = accesskit::NodeBuilder::new(accesskit::Role::Window);
-            let pixels_per_point = viewport.input.pixels_per_point();
-            builder.set_transform(accesskit::Affine::scale(pixels_per_point.into()));
-            let mut node_builders = IdMap::default();
-            node_builders.insert(id, builder);
-            viewport.frame_state.accesskit_state = Some(AccessKitFrameState {
-                node_builders,
-                parent_stack: vec![id],
-            });
-        }
-
         self.update_fonts_mut();
     }
 
     /// Load fonts unless already loaded.
     fn update_fonts_mut(&mut self) {
-        crate::profile_function!();
-
         let input = &self.viewport().input;
         let pixels_per_point = input.pixels_per_point();
         let max_texture_side = input.max_texture_side;
@@ -528,8 +497,6 @@ impl ContextImpl {
             // New font definition loaded, so we need to reload all fonts.
             self.fonts.clear();
             self.font_definitions = font_definitions;
-            #[cfg(feature = "log")]
-            log::debug!("Loading new font definitions");
         }
 
         let mut is_new = false;
@@ -538,49 +505,21 @@ impl ContextImpl {
             .fonts
             .entry(pixels_per_point.into())
             .or_insert_with(|| {
-                #[cfg(feature = "log")]
-                log::trace!("Creating new Fonts for pixels_per_point={pixels_per_point}");
-
                 is_new = true;
-                crate::profile_scope!("Fonts::new");
                 Fonts::new(
                     pixels_per_point,
                     max_texture_side,
                     self.font_definitions.clone(),
                 )
             });
-
-        {
-            crate::profile_scope!("Fonts::begin_frame");
-            fonts.begin_frame(pixels_per_point, max_texture_side);
-        }
-
+        fonts.begin_frame(pixels_per_point, max_texture_side);
         if is_new && self.memory.options.preload_font_glyphs {
-            crate::profile_scope!("preload_font_glyphs");
             // Preload the most common characters for the most common fonts.
             // This is not very important to do, but may save a few GPU operations.
             for font_id in self.memory.options.style.text_styles.values() {
                 fonts.lock().fonts.font(font_id).preload_common_characters();
             }
         }
-    }
-
-    #[cfg(feature = "accesskit")]
-    fn accesskit_node_builder(&mut self, id: Id) -> &mut accesskit::NodeBuilder {
-        let state = self
-            .viewport()
-            .frame_state
-            .accesskit_state
-            .as_mut()
-            .unwrap();
-        let builders = &mut state.node_builders;
-        if let std::collections::hash_map::Entry::Vacant(entry) = builders.entry(id) {
-            entry.insert(Default::default());
-            let parent_id = state.parent_stack.last().unwrap();
-            let parent_builder = builders.get_mut(parent_id).unwrap();
-            parent_builder.push_child(id.accesskit_id());
-        }
-        builders.get_mut(&id).unwrap()
     }
 
     fn pixels_per_point(&mut self) -> f32 {
@@ -676,17 +615,17 @@ impl ContextImpl {
 /// }
 /// ```
 #[derive(Clone)]
-pub struct Context(Arc<RwLock<ContextImpl>>);
+pub struct Context(Rc<RefCell<ContextImpl>>);
 
-impl std::fmt::Debug for Context {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for Context {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         f.debug_struct("Context").finish_non_exhaustive()
     }
 }
 
-impl std::cmp::PartialEq for Context {
+impl core::cmp::PartialEq for Context {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0)
+        Rc::ptr_eq(&self.0, &other.0)
     }
 }
 
@@ -696,7 +635,7 @@ impl Default for Context {
             embed_viewports: true,
             ..Default::default()
         };
-        let ctx = Self(Arc::new(RwLock::new(ctx_impl)));
+        let ctx = Self(Rc::new(RefCell::new(ctx_impl)));
 
         // Register built-in plugins:
         crate::debug_text::register(&ctx);
@@ -710,12 +649,12 @@ impl Default for Context {
 impl Context {
     /// Do read-only (shared access) transaction on Context
     fn read<R>(&self, reader: impl FnOnce(&ContextImpl) -> R) -> R {
-        reader(&self.0.read())
+        reader(&self.0.borrow())
     }
 
     /// Do read-write (exclusive access) transaction on Context
     fn write<R>(&self, writer: impl FnOnce(&mut ContextImpl) -> R) -> R {
-        writer(&mut self.0.write())
+        writer(&mut self.0.borrow_mut())
     }
 
     /// Run the ui code for one frame.
@@ -742,8 +681,6 @@ impl Context {
     /// ```
     #[must_use]
     pub fn run(&self, new_input: RawInput, run_ui: impl FnOnce(&Self)) -> FullOutput {
-        crate::profile_function!();
-
         self.begin_frame(new_input);
         run_ui(self);
         self.end_frame()
@@ -767,7 +704,6 @@ impl Context {
     /// // handle full_output
     /// ```
     pub fn begin_frame(&self, new_input: RawInput) {
-        crate::profile_function!();
         self.read(|ctx| ctx.plugins.clone()).on_begin_frame(self);
         self.write(|ctx| ctx.begin_frame_mut(new_input));
     }
@@ -1040,18 +976,7 @@ impl Context {
             self.check_for_id_clash(w.id, w.rect, "widget");
         }
 
-        #[allow(clippy::let_and_return)]
-        let res = self.get_response(w);
-
-        #[cfg(feature = "accesskit")]
-        if w.sense.focusable {
-            // Make sure anything that can receive focus has an AccessKit node.
-            // TODO(mwcampbell): For nodes that are filled from widget info,
-            // some information is written to the node twice.
-            self.accesskit_node_builder(w.id, |builder| res.fill_accesskit_node_common(builder));
-        }
-
-        res
+        self.get_response(w)
     }
 
     /// Read the response of some widget, which may be called _before_ creating the widget (!).
@@ -1127,14 +1052,6 @@ impl Context {
                 && (input.key_pressed(Key::Space) || input.key_pressed(Key::Enter))
             {
                 // Space/enter works like a primary click for e.g. selected buttons
-                res.fake_primary_click = true;
-            }
-
-            #[cfg(feature = "accesskit")]
-            if enabled
-                && sense.click
-                && input.has_accesskit_action_request(id, accesskit::Action::Default)
-            {
                 res.fake_primary_click = true;
             }
 
@@ -1500,10 +1417,7 @@ impl Context {
     /// This lets you wake up a sleeping UI thread.
     ///
     /// Note that only one callback can be set. Any new call overrides the previous callback.
-    pub fn set_request_repaint_callback(
-        &self,
-        callback: impl Fn(RequestRepaintInfo) + Send + Sync + 'static,
-    ) {
+    pub fn set_request_repaint_callback(&self, callback: impl Fn(RequestRepaintInfo) + 'static) {
         let callback = Box::new(callback);
         self.write(|ctx| ctx.request_repaint_callback = Some(callback));
     }
@@ -1546,8 +1460,6 @@ impl Context {
     ///
     /// The new fonts will become active at the start of the next frame.
     pub fn set_fonts(&self, font_definitions: FontDefinitions) {
-        crate::profile_function!();
-
         let pixels_per_point = self.pixels_per_point();
 
         let mut update_fonts = true;
@@ -1567,7 +1479,7 @@ impl Context {
     }
 
     /// The [`Style`] used by all subsequent windows, panels etc.
-    pub fn style(&self) -> Arc<Style> {
+    pub fn style(&self) -> Rc<Style> {
         self.options(|opt| opt.style.clone())
     }
 
@@ -1581,7 +1493,7 @@ impl Context {
     /// });
     /// ```
     pub fn style_mut(&self, mutate_style: impl FnOnce(&mut Style)) {
-        self.options_mut(|opt| mutate_style(std::sync::Arc::make_mut(&mut opt.style)));
+        self.options_mut(|opt| mutate_style(Rc::make_mut(&mut opt.style)));
     }
 
     /// The [`Style`] used by all new windows, panels etc.
@@ -1589,7 +1501,7 @@ impl Context {
     /// You can also change this using [`Self::style_mut`]
     ///
     /// You can use [`Ui::style_mut`] to change the style of a single [`Ui`].
-    pub fn set_style(&self, style: impl Into<Arc<Style>>) {
+    pub fn set_style(&self, style: impl Into<Rc<Style>>) {
         self.options_mut(|opt| opt.style = style.into());
     }
 
@@ -1603,7 +1515,7 @@ impl Context {
     /// ctx.set_visuals(egui::Visuals::light()); // Switch to light mode
     /// ```
     pub fn set_visuals(&self, visuals: crate::Visuals) {
-        self.options_mut(|opt| std::sync::Arc::make_mut(&mut opt.style).visuals = visuals);
+        self.options_mut(|opt| Rc::make_mut(&mut opt.style).visuals = visuals);
     }
 
     /// The number of physical pixels for each logical point.
@@ -1757,7 +1669,7 @@ impl Context {
             max_texture_side
         );
         let tex_mngr = self.tex_manager();
-        let tex_id = tex_mngr.write().alloc(name, image, options);
+        let tex_id = tex_mngr.borrow_mut().alloc(name, image, options);
         TextureHandle::new(tex_mngr, tex_id)
     }
 
@@ -1766,7 +1678,7 @@ impl Context {
     /// In general it is easier to use [`Self::load_texture`] and [`TextureHandle`].
     ///
     /// You can show stats about the allocated textures using [`Self::texture_ui`].
-    pub fn tex_manager(&self) -> Arc<RwLock<epaint::textures::TextureManager>> {
+    pub fn tex_manager(&self) -> Rc<RefCell<epaint::textures::TextureManager>> {
         self.read(|ctx| ctx.tex_manager.0.clone())
     }
 
@@ -1811,8 +1723,6 @@ impl Context {
     /// Call at the end of each frame.
     #[must_use]
     pub fn end_frame(&self) -> FullOutput {
-        crate::profile_function!();
-
         if self.options(|o| o.zoom_with_keyboard) {
             crate::gui_zoom::zoom_with_keyboard(self);
         }
@@ -1828,6 +1738,8 @@ impl Context {
     /// Called at the end of the frame.
     #[cfg(debug_assertions)]
     fn debug_painting(&self) {
+        use alloc::borrow::ToOwned;
+
         let paint_widget = |widget: &WidgetRect, text: &str, color: Color32| {
             let rect = widget.interact_rect;
             if rect.is_positive() {
@@ -1954,7 +1866,7 @@ impl ContextImpl {
         self.memory.end_frame(&viewport.frame_state.used_ids);
 
         if let Some(fonts) = self.fonts.get(&pixels_per_point.into()) {
-            let tex_mngr = &mut self.tex_manager.0.write();
+            let tex_mngr = &mut self.tex_manager.0.borrow_mut();
             if let Some(font_image_delta) = fonts.font_image_delta() {
                 // A partial font atlas update, e.g. a new glyph has been entered.
                 tex_mngr.set(TextureId::default(), font_image_delta);
@@ -1973,47 +1885,15 @@ impl ContextImpl {
                 // https://github.com/emilk/egui/issues/3664
                 // at the cost of a lot of performance.
                 // (This will override any smaller delta that was uploaded above.)
-                crate::profile_scope!("full_font_atlas_update");
                 let full_delta = ImageDelta::full(fonts.image(), TextureAtlas::texture_options());
                 tex_mngr.set(TextureId::default(), full_delta);
             }
         }
 
         // Inform the backend of all textures that have been updated (including font atlas).
-        let textures_delta = self.tex_manager.0.write().take_delta();
+        let textures_delta = self.tex_manager.0.borrow_mut().take_delta();
 
-        #[cfg_attr(not(feature = "accesskit"), allow(unused_mut))]
-        let mut platform_output: PlatformOutput = std::mem::take(&mut viewport.output);
-
-        #[cfg(feature = "accesskit")]
-        {
-            crate::profile_scope!("accesskit");
-            let state = viewport.frame_state.accesskit_state.take();
-            if let Some(state) = state {
-                let root_id = crate::accesskit_root_id().accesskit_id();
-                let nodes = {
-                    state
-                        .node_builders
-                        .into_iter()
-                        .map(|(id, builder)| {
-                            (
-                                id.accesskit_id(),
-                                builder.build(&mut self.accesskit_node_classes),
-                            )
-                        })
-                        .collect()
-                };
-                let focus_id = self
-                    .memory
-                    .focused()
-                    .map_or(root_id, |id| id.accesskit_id());
-                platform_output.accesskit_update = Some(accesskit::TreeUpdate {
-                    nodes,
-                    tree: Some(accesskit::Tree::new(root_id)),
-                    focus: focus_id,
-                });
-            }
-        }
+        let platform_output: PlatformOutput = core::mem::take(&mut viewport.output);
 
         let shapes = viewport
             .graphics
@@ -2021,20 +1901,16 @@ impl ContextImpl {
 
         let mut repaint_needed = false;
 
+        if self.memory.options.repaint_on_widget_change
+            && viewport.widgets_prev_frame != viewport.widgets_this_frame
         {
-            if self.memory.options.repaint_on_widget_change {
-                crate::profile_function!("compare-widget-rects");
-                if viewport.widgets_prev_frame != viewport.widgets_this_frame {
-                    repaint_needed = true; // Some widget has moved
-                }
-            }
-
-            std::mem::swap(
-                &mut viewport.widgets_prev_frame,
-                &mut viewport.widgets_this_frame,
-            );
-            viewport.widgets_this_frame.clear();
+            repaint_needed = true; // Some widget has moved
         }
+        core::mem::swap(
+            &mut viewport.widgets_prev_frame,
+            &mut viewport.widgets_this_frame,
+        );
+        viewport.widgets_this_frame.clear();
 
         if repaint_needed || viewport.input.wants_repaint() {
             self.request_repaint(ended_viewport_id, RepaintCause::new());
@@ -2050,26 +1926,12 @@ impl ContextImpl {
             let parent = *self.viewport_parents.entry(id).or_default();
 
             if !all_viewport_ids.contains(&parent) {
-                #[cfg(feature = "log")]
-                log::debug!(
-                    "Removing viewport {:?} ({:?}): the parent is gone",
-                    id,
-                    viewport.builder.title
-                );
-
                 return false;
             }
 
             let is_our_child = parent == ended_viewport_id && id != ViewportId::ROOT;
             if is_our_child {
                 if !viewport.used {
-                    #[cfg(feature = "log")]
-                    log::debug!(
-                        "Removing viewport {:?} ({:?}): it was never used this frame",
-                        id,
-                        viewport.builder.title
-                    );
-
                     return false; // Only keep children that have been updated this frame
                 }
 
@@ -2095,7 +1957,7 @@ impl ContextImpl {
                     // Let the primary immediate viewport handle the commands of its children too.
                     // This can make things easier for the backend, as otherwise we may get commands
                     // that affect a viewport while its egui logic is running.
-                    std::mem::take(&mut viewport.commands)
+                    core::mem::take(&mut viewport.commands)
                 } else {
                     vec![]
                 };
@@ -2124,23 +1986,13 @@ impl ContextImpl {
             self.memory.set_viewport_id(viewport_id);
         }
 
-        let active_pixels_per_point: std::collections::BTreeSet<OrderedFloat<f32>> = self
+        let active_pixels_per_point: alloc::collections::BTreeSet<OrderedFloat<f32>> = self
             .viewports
             .values()
             .map(|v| v.input.pixels_per_point.into())
             .collect();
-        self.fonts.retain(|pixels_per_point, _| {
-            if active_pixels_per_point.contains(pixels_per_point) {
-                true
-            } else {
-                #[cfg(feature = "log")]
-                log::trace!(
-                    "Freeing Fonts with pixels_per_point={} because it is no longer needed",
-                    pixels_per_point.into_inner()
-                );
-                false
-            }
-        });
+        self.fonts
+            .retain(|pixels_per_point, _| active_pixels_per_point.contains(pixels_per_point));
 
         FullOutput {
             platform_output,
@@ -2163,8 +2015,6 @@ impl Context {
         shapes: Vec<ClippedShape>,
         pixels_per_point: f32,
     ) -> Vec<ClippedPrimitive> {
-        crate::profile_function!();
-
         // A tempting optimization is to reuse the tessellation from last frame if the
         // shapes are the same, but just comparing the shapes takes about 50% of the time
         // it takes to tessellate them, so it is not a worth optimization.
@@ -2178,13 +2028,12 @@ impl Context {
                          You should use egui::FullOutput::pixels_per_point when tessellating.")
                 .texture_atlas();
             let (font_tex_size, prepared_discs) = {
-                let atlas = texture_atlas.lock();
+                let atlas = texture_atlas.borrow();
                 (atlas.size(), atlas.prepared_discs())
             };
 
             let paint_stats = PaintStats::from_shapes(&shapes);
             let clipped_primitives = {
-                crate::profile_scope!("tessellator::tessellate_shapes");
                 tessellator::Tessellator::new(
                     pixels_per_point,
                     tessellation_options,
@@ -2617,7 +2466,7 @@ impl Context {
     /// Show stats about the allocated textures.
     pub fn texture_ui(&self, ui: &mut crate::Ui) {
         let tex_mngr = self.tex_manager();
-        let tex_mngr = tex_mngr.read();
+        let tex_mngr = tex_mngr.borrow();
 
         let mut textures: Vec<_> = tex_mngr.allocated().collect();
         textures.sort_by_key(|(id, _)| *id);
@@ -2781,95 +2630,6 @@ impl Context {
     }
 }
 
-/// ## Accessibility
-impl Context {
-    /// Call the provided function with the given ID pushed on the stack of
-    /// parent IDs for accessibility purposes. If the `accesskit` feature
-    /// is disabled or if AccessKit support is not active for this frame,
-    /// the function is still called, but with no other effect.
-    ///
-    /// No locks are held while the given closure is called.
-    #[allow(clippy::unused_self)]
-    #[inline]
-    pub fn with_accessibility_parent(&self, _id: Id, f: impl FnOnce()) {
-        // TODO(emilk): this isn't thread-safe - another thread can call this function between the push/pop calls
-        #[cfg(feature = "accesskit")]
-        self.frame_state_mut(|fs| {
-            if let Some(state) = fs.accesskit_state.as_mut() {
-                state.parent_stack.push(_id);
-            }
-        });
-
-        f();
-
-        #[cfg(feature = "accesskit")]
-        self.frame_state_mut(|fs| {
-            if let Some(state) = fs.accesskit_state.as_mut() {
-                assert_eq!(state.parent_stack.pop(), Some(_id));
-            }
-        });
-    }
-
-    /// If AccessKit support is active for the current frame, get or create
-    /// a node builder with the specified ID and return a mutable reference to it.
-    /// For newly created nodes, the parent is the node with the ID at the top
-    /// of the stack managed by [`Context::with_accessibility_parent`].
-    ///
-    /// The `Context` lock is held while the given closure is called!
-    ///
-    /// Returns `None` if acesskit is off.
-    // TODO(emilk): consider making both read-only and read-write versions
-    #[cfg(feature = "accesskit")]
-    pub fn accesskit_node_builder<R>(
-        &self,
-        id: Id,
-        writer: impl FnOnce(&mut accesskit::NodeBuilder) -> R,
-    ) -> Option<R> {
-        self.write(|ctx| {
-            ctx.viewport()
-                .frame_state
-                .accesskit_state
-                .is_some()
-                .then(|| ctx.accesskit_node_builder(id))
-                .map(writer)
-        })
-    }
-
-    /// Enable generation of AccessKit tree updates in all future frames.
-    ///
-    /// If it's practical for the egui integration to immediately run the egui
-    /// application when it is either initializing the AccessKit adapter or
-    /// being called by the AccessKit adapter to provide the initial tree update,
-    /// then it should do so, to provide a complete AccessKit tree to the adapter
-    /// immediately. Otherwise, it should enqueue a repaint and use the
-    /// placeholder tree update from [`Context::accesskit_placeholder_tree_update`]
-    /// in the meantime.
-    #[cfg(feature = "accesskit")]
-    pub fn enable_accesskit(&self) {
-        self.write(|ctx| ctx.is_accesskit_enabled = true);
-    }
-
-    /// Return a tree update that the egui integration should provide to the
-    /// AccessKit adapter if it cannot immediately run the egui application
-    /// to get a full tree update after running [`Context::enable_accesskit`].
-    #[cfg(feature = "accesskit")]
-    pub fn accesskit_placeholder_tree_update(&self) -> accesskit::TreeUpdate {
-        crate::profile_function!();
-
-        use accesskit::{NodeBuilder, Role, Tree, TreeUpdate};
-
-        let root_id = crate::accesskit_root_id().accesskit_id();
-        self.write(|ctx| TreeUpdate {
-            nodes: vec![(
-                root_id,
-                NodeBuilder::new(Role::Window).build(&mut ctx.accesskit_node_classes),
-            )],
-            tree: Some(Tree::new(root_id)),
-            focus: root_id,
-        })
-    }
-}
-
 /// ## Image loading
 impl Context {
     /// Associate some static bytes with a `uri`.
@@ -2887,9 +2647,9 @@ impl Context {
     pub fn is_loader_installed(&self, id: &str) -> bool {
         let loaders = self.loaders();
 
-        loaders.bytes.lock().iter().any(|l| l.id() == id)
-            || loaders.image.lock().iter().any(|l| l.id() == id)
-            || loaders.texture.lock().iter().any(|l| l.id() == id)
+        loaders.bytes.borrow().iter().any(|l| l.id() == id)
+            || loaders.image.borrow().iter().any(|l| l.id() == id)
+            || loaders.texture.borrow().iter().any(|l| l.id() == id)
     }
 
     /// Add a new bytes loader.
@@ -2897,8 +2657,8 @@ impl Context {
     /// It will be tried first, before any already installed loaders.
     ///
     /// See [`load`] for more information.
-    pub fn add_bytes_loader(&self, loader: Arc<dyn load::BytesLoader + Send + Sync + 'static>) {
-        self.loaders().bytes.lock().push(loader);
+    pub fn add_bytes_loader(&self, loader: Rc<dyn load::BytesLoader + 'static>) {
+        self.loaders().bytes.borrow_mut().push(loader);
     }
 
     /// Add a new image loader.
@@ -2906,8 +2666,8 @@ impl Context {
     /// It will be tried first, before any already installed loaders.
     ///
     /// See [`load`] for more information.
-    pub fn add_image_loader(&self, loader: Arc<dyn load::ImageLoader + Send + Sync + 'static>) {
-        self.loaders().image.lock().push(loader);
+    pub fn add_image_loader(&self, loader: Rc<dyn load::ImageLoader + 'static>) {
+        self.loaders().image.borrow_mut().push(loader);
     }
 
     /// Add a new texture loader.
@@ -2915,8 +2675,8 @@ impl Context {
     /// It will be tried first, before any already installed loaders.
     ///
     /// See [`load`] for more information.
-    pub fn add_texture_loader(&self, loader: Arc<dyn load::TextureLoader + Send + Sync + 'static>) {
-        self.loaders().texture.lock().push(loader);
+    pub fn add_texture_loader(&self, loader: Rc<dyn load::TextureLoader + 'static>) {
+        self.loaders().texture.borrow_mut().push(loader);
     }
 
     /// Release all memory and textures related to the given image URI.
@@ -2924,19 +2684,16 @@ impl Context {
     /// If you attempt to load the image again, it will be reloaded from scratch.
     pub fn forget_image(&self, uri: &str) {
         use load::BytesLoader as _;
-
-        crate::profile_function!();
-
         let loaders = self.loaders();
 
         loaders.include.forget(uri);
-        for loader in loaders.bytes.lock().iter() {
+        for loader in loaders.bytes.borrow().iter() {
             loader.forget(uri);
         }
-        for loader in loaders.image.lock().iter() {
+        for loader in loaders.image.borrow().iter() {
             loader.forget(uri);
         }
-        for loader in loaders.texture.lock().iter() {
+        for loader in loaders.texture.borrow().iter() {
             loader.forget(uri);
         }
     }
@@ -2946,19 +2703,16 @@ impl Context {
     /// If you attempt to load any images again, they will be reloaded from scratch.
     pub fn forget_all_images(&self) {
         use load::BytesLoader as _;
-
-        crate::profile_function!();
-
         let loaders = self.loaders();
 
         loaders.include.forget_all();
-        for loader in loaders.bytes.lock().iter() {
+        for loader in loaders.bytes.borrow().iter() {
             loader.forget_all();
         }
-        for loader in loaders.image.lock().iter() {
+        for loader in loaders.image.borrow().iter() {
             loader.forget_all();
         }
-        for loader in loaders.texture.lock().iter() {
+        for loader in loaders.texture.borrow().iter() {
             loader.forget_all();
         }
     }
@@ -2982,10 +2736,8 @@ impl Context {
     /// [not_supported]: crate::load::LoadError::NotSupported
     /// [custom]: crate::load::LoadError::Loading
     pub fn try_load_bytes(&self, uri: &str) -> load::BytesLoadResult {
-        crate::profile_function!(uri);
-
         let loaders = self.loaders();
-        let bytes_loaders = loaders.bytes.lock();
+        let bytes_loaders = loaders.bytes.borrow();
 
         // Try most recently added loaders first (hence `.rev()`)
         for loader in bytes_loaders.iter().rev() {
@@ -3019,10 +2771,8 @@ impl Context {
     /// [not_supported]: crate::load::LoadError::NotSupported
     /// [custom]: crate::load::LoadError::Loading
     pub fn try_load_image(&self, uri: &str, size_hint: load::SizeHint) -> load::ImageLoadResult {
-        crate::profile_function!(uri);
-
         let loaders = self.loaders();
-        let image_loaders = loaders.image.lock();
+        let image_loaders = loaders.image.borrow();
         if image_loaders.is_empty() {
             return Err(load::LoadError::NoImageLoaders);
         }
@@ -3062,10 +2812,8 @@ impl Context {
         texture_options: TextureOptions,
         size_hint: load::SizeHint,
     ) -> load::TextureLoadResult {
-        crate::profile_function!(uri);
-
         let loaders = self.loaders();
-        let texture_loaders = loaders.texture.lock();
+        let texture_loaders = loaders.texture.borrow();
 
         // Try most recently added loaders first (hence `.rev()`)
         for loader in texture_loaders.iter().rev() {
@@ -3079,8 +2827,7 @@ impl Context {
     }
 
     /// The loaders of bytes, images, and textures.
-    pub fn loaders(&self) -> Arc<Loaders> {
-        crate::profile_function!();
+    pub fn loaders(&self) -> Rc<Loaders> {
         self.read(|this| this.loaders.clone())
     }
 }
@@ -3103,28 +2850,6 @@ impl Context {
     /// Don't use this outside of `Self::run`, or after `Self::end_frame`.
     pub fn parent_viewport_id(&self) -> ViewportId {
         self.read(|ctx| ctx.parent_viewport_id())
-    }
-
-    /// For integrations: Set this to render a sync viewport.
-    ///
-    /// This will only set the callback for the current thread,
-    /// which most likely should be the main thread.
-    ///
-    /// When an immediate viewport is created with [`Self::show_viewport_immediate`] it will be rendered by this function.
-    ///
-    /// When called, the integration needs to:
-    /// * Check if there already is a window for this viewport id, and if not open one
-    /// * Set the window attributes (position, size, …) based on [`ImmediateViewport::builder`].
-    /// * Call [`Context::run`] with [`ImmediateViewport::viewport_ui_cb`].
-    /// * Handle the output from [`Context::run`], including rendering
-    #[allow(clippy::unused_self)]
-    pub fn set_immediate_viewport_renderer(
-        callback: impl for<'a> Fn(&Self, ImmediateViewport<'a>) + 'static,
-    ) {
-        let callback = Box::new(callback);
-        IMMEDIATE_VIEWPORT_RENDERER.with(|render_sync| {
-            render_sync.replace(Some(callback));
-        });
     }
 
     /// If `true`, [`Self::show_viewport_deferred`] and [`Self::show_viewport_immediate`] will
@@ -3196,10 +2921,8 @@ impl Context {
         &self,
         new_viewport_id: ViewportId,
         viewport_builder: ViewportBuilder,
-        viewport_ui_cb: impl Fn(&Self, ViewportClass) + Send + Sync + 'static,
+        viewport_ui_cb: impl Fn(&Self, ViewportClass) + 'static,
     ) {
-        crate::profile_function!();
-
         if self.embed_viewports() {
             viewport_ui_cb(self, ViewportClass::Embedded);
         } else {
@@ -3211,91 +2934,11 @@ impl Context {
                 viewport.class = ViewportClass::Deferred;
                 viewport.builder = viewport_builder;
                 viewport.used = true;
-                viewport.viewport_ui_cb = Some(Arc::new(move |ctx| {
+                viewport.viewport_ui_cb = Some(Rc::new(move |ctx| {
                     (viewport_ui_cb)(ctx, ViewportClass::Deferred);
                 }));
             });
         }
-    }
-
-    /// Show an immediate viewport, creating a new native window, if possible.
-    ///
-    /// This is the easier type of viewport to use, but it is less performant
-    /// at it requires both parent and child to repaint if any one of them needs repainting,
-    /// which efficvely produce double work for two viewports, and triple work for three viewports, etc.
-    /// To avoid this, use [`Self::show_viewport_deferred`] instead.
-    ///
-    /// The given id must be unique for each viewport.
-    ///
-    /// You need to call this each frame when the child viewport should exist.
-    ///
-    /// You can check if the user wants to close the viewport by checking the
-    /// [`crate::ViewportInfo::close_requested`] flags found in [`crate::InputState::viewport`].
-    ///
-    /// The given ui function will be called immediately.
-    /// This may only be called on the main thread.
-    /// This call will pause the current viewport and render the child viewport in its own window.
-    /// This means that the child viewport will not be repainted when the parent viewport is repainted, and vice versa.
-    ///
-    /// If [`Context::embed_viewports`] is `true` (e.g. if the current egui
-    /// backend does not support multiple viewports), the given callback
-    /// will be called immediately, embedding the new viewport in the current one.
-    /// You can check this with the [`ViewportClass`] given in the callback.
-    /// If you find [`ViewportClass::Embedded`], you need to create a new [`crate::Window`] for you content.
-    ///
-    /// See [`crate::viewport`] for more information about viewports.
-    pub fn show_viewport_immediate<T>(
-        &self,
-        new_viewport_id: ViewportId,
-        builder: ViewportBuilder,
-        viewport_ui_cb: impl FnOnce(&Self, ViewportClass) -> T,
-    ) -> T {
-        crate::profile_function!();
-
-        if self.embed_viewports() {
-            return viewport_ui_cb(self, ViewportClass::Embedded);
-        }
-
-        IMMEDIATE_VIEWPORT_RENDERER.with(|immediate_viewport_renderer| {
-            let immediate_viewport_renderer = immediate_viewport_renderer.borrow();
-            let Some(immediate_viewport_renderer) = immediate_viewport_renderer.as_ref() else {
-                // This egui backend does not support multiple viewports.
-                return viewport_ui_cb(self, ViewportClass::Embedded);
-            };
-
-            let ids = self.write(|ctx| {
-                let parent_viewport_id = ctx.viewport_id();
-
-                ctx.viewport_parents
-                    .insert(new_viewport_id, parent_viewport_id);
-
-                let viewport = ctx.viewports.entry(new_viewport_id).or_default();
-                viewport.builder = builder.clone();
-                viewport.used = true;
-                viewport.viewport_ui_cb = None; // it is immediate
-
-                ViewportIdPair::from_self_and_parent(new_viewport_id, parent_viewport_id)
-            });
-
-            let mut out = None;
-            {
-                let out = &mut out;
-
-                let viewport = ImmediateViewport {
-                    ids,
-                    builder,
-                    viewport_ui_cb: Box::new(move |context| {
-                        *out = Some(viewport_ui_cb(context, ViewportClass::Immediate));
-                    }),
-                };
-
-                immediate_viewport_renderer(self, viewport);
-            }
-
-            out.expect(
-                "egui backend is implemented incorrectly - the user callback was never called",
-            )
-        })
     }
 }
 
@@ -3376,10 +3019,4 @@ impl Context {
         let dragged = self.dragged_id();
         dragged.is_some() && dragged != Some(not_this)
     }
-}
-
-#[test]
-fn context_impl_send_sync() {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<Context>();
 }

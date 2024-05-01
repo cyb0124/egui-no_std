@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use alloc::{boxed::Box, rc::Rc};
 
 use crate::*;
 
@@ -19,7 +19,7 @@ pub fn adjust_colors(
             color::ColorMode::Solid(mut col) => adjust_color(&mut col),
             color::ColorMode::UV(callback) => {
                 let callback = callback.clone();
-                stroke.color = color::ColorMode::UV(Arc::new(Box::new(move |rect, pos| {
+                stroke.color = color::ColorMode::UV(Rc::new(Box::new(move |rect, pos| {
                     let mut col = callback(rect, pos);
                     adjust_color(&mut col);
                     col
@@ -50,7 +50,7 @@ pub fn adjust_colors(
                 color::ColorMode::Solid(mut col) => adjust_color(&mut col),
                 color::ColorMode::UV(callback) => {
                     let callback = callback.clone();
-                    stroke.color = color::ColorMode::UV(Arc::new(Box::new(move |rect, pos| {
+                    stroke.color = color::ColorMode::UV(Rc::new(Box::new(move |rect, pos| {
                         let mut col = callback(rect, pos);
                         adjust_color(&mut col);
                         col
@@ -100,7 +100,7 @@ pub fn adjust_colors(
             }
 
             if !galley.is_empty() {
-                let galley = std::sync::Arc::make_mut(galley);
+                let galley = alloc::rc::Rc::make_mut(galley);
                 for row in &mut galley.rows {
                     for vertex in &mut row.visuals.mesh.vertices {
                         adjust_color(&mut vertex.color);

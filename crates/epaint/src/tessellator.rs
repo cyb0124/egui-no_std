@@ -7,10 +7,9 @@
 
 use crate::texture_atlas::PreparedDisc;
 use crate::*;
+use alloc::vec::Vec;
 use emath::*;
-
-use self::color::ColorMode;
-use self::stroke::PathStroke;
+use num_traits::Float;
 
 // ----------------------------------------------------------------------------
 
@@ -520,6 +519,7 @@ impl Path {
 pub mod path {
     //! Helpers for constructing paths
     use crate::shape::Rounding;
+    use alloc::vec::Vec;
     use emath::*;
 
     /// overwrites existing points
@@ -686,9 +686,6 @@ pub struct TessellationOptions {
     /// The default value will be 1.0e-5, it will be used during float compare.
     pub epsilon: f32,
 
-    /// If `rayon` feature is activated, should we parallelize tessellation?
-    pub parallel_tessellation: bool,
-
     /// If `true`, invalid meshes will be silently ignored.
     /// If `false`, invalid meshes will cause a panic.
     ///
@@ -709,7 +706,6 @@ impl Default for TessellationOptions {
             debug_ignore_clip_rects: false,
             bezier_tolerance: 0.1,
             epsilon: 1.0e-5,
-            parallel_tessellation: true,
             validate_meshes: false,
         }
     }
@@ -1308,8 +1304,6 @@ impl Tessellator {
                 self.tessellate_ellipse(ellipse, out);
             }
             Shape::Mesh(mesh) => {
-                crate::profile_scope!("mesh");
-
                 if self.options.validate_meshes && !mesh.is_valid() {
                     crate::epaint_assert!(false, "Invalid Mesh in Shape::Mesh");
                     return;
@@ -1450,7 +1444,7 @@ impl Tessellator {
                 let eased = 2.0 * (percent - percent.powf(2.0)) * ratio + percent.powf(2.0);
 
                 // Scale the ease to the quarter
-                let t = eased * std::f32::consts::FRAC_PI_2;
+                let t = eased * core::f32::consts::FRAC_PI_2;
                 Vec2::new(radius.x * f32::cos(t), radius.y * f32::sin(t))
             })
             .collect();
@@ -1536,8 +1530,6 @@ impl Tessellator {
         {
             return;
         }
-
-        crate::profile_function!();
 
         let PathShape {
             points,
@@ -1689,10 +1681,10 @@ impl Tessellator {
             return;
         }
 
-        if galley.pixels_per_point != self.pixels_per_point {
-            eprintln!("epaint: WARNING: pixels_per_point (dpi scale) have changed between text layout and tessellation. \
-                       You must recreate your text shapes if pixels_per_point changes.");
-        }
+        // if galley.pixels_per_point != self.pixels_per_point {
+        //     eprintln!("epaint: WARNING: pixels_per_point (dpi scale) have changed between text layout and tessellation. \
+        //                You must recreate your text shapes if pixels_per_point changes.");
+        // }
 
         out.vertices.reserve(galley.num_vertices);
         out.indices.reserve(galley.num_indices);
@@ -1910,20 +1902,10 @@ impl Tessellator {
     /// A list of clip rectangles with matching [`Mesh`].
     #[allow(unused_mut)]
     pub fn tessellate_shapes(&mut self, mut shapes: Vec<ClippedShape>) -> Vec<ClippedPrimitive> {
-        crate::profile_function!();
-
-        #[cfg(feature = "rayon")]
-        if self.options.parallel_tessellation {
-            self.parallel_tessellation_of_large_shapes(&mut shapes);
-        }
-
         let mut clipped_primitives: Vec<ClippedPrimitive> = Vec::default();
 
-        {
-            crate::profile_scope!("tessellate");
-            for clipped_shape in shapes {
-                self.tessellate_clipped_shape(clipped_shape, &mut clipped_primitives);
-            }
+        for clipped_shape in shapes {
+            self.tessellate_clipped_shape(clipped_shape, &mut clipped_primitives);
         }
 
         if self.options.debug_paint_clip_rects {
@@ -1951,55 +1933,6 @@ impl Tessellator {
         }
 
         clipped_primitives
-    }
-
-    /// Find large shapes and throw them on the rayon thread pool,
-    /// then replace the original shape with their tessellated meshes.
-    #[cfg(feature = "rayon")]
-    fn parallel_tessellation_of_large_shapes(&self, shapes: &mut [ClippedShape]) {
-        crate::profile_function!();
-
-        use rayon::prelude::*;
-
-        // We only parallelize large/slow stuff, because each tessellation job
-        // will allocate a new Mesh, and so it creates a lot of extra memory framentation
-        // and callocations that is only worth it for large shapes.
-        fn should_parallelize(shape: &Shape) -> bool {
-            match shape {
-                Shape::Vec(shapes) => 4 < shapes.len() || shapes.iter().any(should_parallelize),
-
-                Shape::Path(path_shape) => 32 < path_shape.points.len(),
-
-                Shape::QuadraticBezier(_) | Shape::CubicBezier(_) | Shape::Ellipse(_) => true,
-
-                Shape::Noop
-                | Shape::Text(_)
-                | Shape::Circle(_)
-                | Shape::Mesh(_)
-                | Shape::LineSegment { .. }
-                | Shape::Rect(_)
-                | Shape::Callback(_) => false,
-            }
-        }
-
-        let tessellated: Vec<(usize, Mesh)> = shapes
-            .par_iter()
-            .enumerate()
-            .filter(|(_, clipped_shape)| should_parallelize(&clipped_shape.shape))
-            .map(|(index, clipped_shape)| {
-                crate::profile_scope!("tessellate_big_shape");
-                // TODO(emilk): reuse tessellator in a thread local
-                let mut tessellator = (*self).clone();
-                let mut mesh = Mesh::default();
-                tessellator.tessellate_shape(clipped_shape.shape.clone(), &mut mesh);
-                (index, mesh)
-            })
-            .collect();
-
-        crate::profile_scope!("distribute results", tessellated.len().to_string());
-        for (index, mesh) in tessellated {
-            shapes[index].shape = Shape::Mesh(mesh);
-        }
     }
 
     fn add_clip_rects(
@@ -2033,6 +1966,7 @@ impl Tessellator {
 #[test]
 fn test_tessellator() {
     use crate::*;
+    use alloc::vec;
 
     let mut shapes = Vec::with_capacity(2);
 

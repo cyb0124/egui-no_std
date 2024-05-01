@@ -6,6 +6,7 @@
 //! to get callbacks on certain events ([`Context::on_begin_frame`], [`Context::on_end_frame`]).
 
 use crate::*;
+use alloc::{format, rc::Rc, string::String, vec::Vec};
 
 /// Register this plugin on the given egui context,
 /// so that it will be called every frame.
@@ -14,7 +15,7 @@ use crate::*;
 /// meaning [`Context`] calls this from its `Default` implementation,
 /// so this i marked as `pub(crate)`.
 pub(crate) fn register(ctx: &Context) {
-    ctx.on_end_frame("debug_text", std::sync::Arc::new(State::end_frame));
+    ctx.on_end_frame("debug_text", Rc::new(State::end_frame));
 }
 
 /// Print this text next to the cursor at the end of the frame.
@@ -34,7 +35,7 @@ pub fn print(ctx: &Context, text: impl Into<WidgetText>) {
         return;
     }
 
-    let location = std::panic::Location::caller();
+    let location = core::panic::Location::caller();
     let location = format!("{}:{}", location.file(), location.line());
     ctx.data_mut(|data| {
         // We use `Id::NULL` as the id, since we only have one instance of this plugin.

@@ -1,11 +1,8 @@
-use crate::{
-    mutex::{Mutex, RwLock},
-    text::FontTweak,
-    TextureAtlas,
-};
+use crate::{text::FontTweak, TextureAtlas};
+use alloc::{collections::BTreeSet, rc::Rc, string::String, vec::Vec};
+use core::cell::RefCell;
 use emath::{vec2, Vec2};
-use std::collections::BTreeSet;
-use std::sync::Arc;
+use num_traits::Float;
 
 // ----------------------------------------------------------------------------
 
@@ -64,7 +61,7 @@ impl Default for GlyphInfo {
 /// The interface uses points as the unit for everything.
 pub struct FontImpl {
     name: String,
-    ab_glyph_font: ab_glyph::FontArc,
+    ab_glyph_font: Rc<ab_glyph::FontVec>,
 
     /// Maximum character height
     scale_in_pixels: u32,
@@ -76,16 +73,16 @@ pub struct FontImpl {
 
     ascent: f32,
     pixels_per_point: f32,
-    glyph_info_cache: RwLock<ahash::HashMap<char, GlyphInfo>>, // TODO(emilk): standard Mutex
-    atlas: Arc<Mutex<TextureAtlas>>,
+    glyph_info_cache: RefCell<hashbrown::HashMap<char, GlyphInfo>>, // TODO(emilk): standard Mutex
+    atlas: Rc<RefCell<TextureAtlas>>,
 }
 
 impl FontImpl {
     pub fn new(
-        atlas: Arc<Mutex<TextureAtlas>>,
+        atlas: Rc<RefCell<TextureAtlas>>,
         pixels_per_point: f32,
         name: String,
-        ab_glyph_font: ab_glyph::FontArc,
+        ab_glyph_font: Rc<ab_glyph::FontVec>,
         scale_in_pixels: f32,
         tweak: FontTweak,
     ) -> Self {
@@ -175,7 +172,7 @@ impl FontImpl {
     /// `\n` will result in `None`
     fn glyph_info(&self, c: char) -> Option<GlyphInfo> {
         {
-            if let Some(glyph_info) = self.glyph_info_cache.read().get(&c) {
+            if let Some(glyph_info) = self.glyph_info_cache.borrow().get(&c) {
                 return Some(*glyph_info);
             }
         }
@@ -190,7 +187,7 @@ impl FontImpl {
                     advance_width: crate::text::TAB_SIZE as f32 * space.advance_width,
                     ..space
                 };
-                self.glyph_info_cache.write().insert(c, glyph_info);
+                self.glyph_info_cache.borrow_mut().insert(c, glyph_info);
                 return Some(glyph_info);
             }
         }
@@ -207,14 +204,14 @@ impl FontImpl {
                     advance_width,
                     ..space
                 };
-                self.glyph_info_cache.write().insert(c, glyph_info);
+                self.glyph_info_cache.borrow_mut().insert(c, glyph_info);
                 return Some(glyph_info);
             }
         }
 
         if invisible_char(c) {
             let glyph_info = GlyphInfo::default();
-            self.glyph_info_cache.write().insert(c, glyph_info);
+            self.glyph_info_cache.borrow_mut().insert(c, glyph_info);
             return Some(glyph_info);
         }
 
@@ -226,7 +223,7 @@ impl FontImpl {
             None // unsupported character
         } else {
             let glyph_info = self.allocate_glyph(glyph_id);
-            self.glyph_info_cache.write().insert(c, glyph_info);
+            self.glyph_info_cache.borrow_mut().insert(c, glyph_info);
             Some(glyph_info)
         }
     }
@@ -280,7 +277,7 @@ impl FontImpl {
                 UvRect::default()
             } else {
                 let glyph_pos = {
-                    let atlas = &mut self.atlas.lock();
+                    let atlas = &mut self.atlas.borrow_mut();
                     let (glyph_pos, image) = atlas.allocate((glyph_width, glyph_height));
                     glyph.draw(|x, y, v| {
                         if 0.0 < v {
@@ -327,7 +324,7 @@ type FontIndex = usize;
 // TODO(emilk): rename?
 /// Wrapper over multiple [`FontImpl`] (e.g. a primary + fallbacks for emojis)
 pub struct Font {
-    fonts: Vec<Arc<FontImpl>>,
+    fonts: Vec<Rc<FontImpl>>,
 
     /// Lazily calculated.
     characters: Option<BTreeSet<char>>,
@@ -335,11 +332,11 @@ pub struct Font {
     replacement_glyph: (FontIndex, GlyphInfo),
     pixels_per_point: f32,
     row_height: f32,
-    glyph_info_cache: ahash::HashMap<char, (FontIndex, GlyphInfo)>,
+    glyph_info_cache: hashbrown::HashMap<char, (FontIndex, GlyphInfo)>,
 }
 
 impl Font {
-    pub fn new(fonts: Vec<Arc<FontImpl>>) -> Self {
+    pub fn new(fonts: Vec<Rc<FontImpl>>) -> Self {
         if fonts.is_empty() {
             return Self {
                 fonts,

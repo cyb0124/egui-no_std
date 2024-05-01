@@ -16,15 +16,15 @@ where
     }
 }
 
-impl<K, V> std::fmt::Debug for FixedCache<K, V> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<K, V> alloc::fmt::Debug for FixedCache<K, V> {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         write!(f, "Cache")
     }
 }
 
 impl<K, V> FixedCache<K, V>
 where
-    K: std::hash::Hash + PartialEq,
+    K: core::hash::Hash + PartialEq,
 {
     pub fn get(&self, key: &K) -> Option<&V> {
         let bucket = (hash(key) % (FIXED_CACHE_SIZE as u64)) as usize;

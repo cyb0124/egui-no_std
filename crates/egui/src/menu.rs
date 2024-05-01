@@ -15,13 +15,10 @@
 //! }
 //! ```
 
-use super::{
-    style::WidgetVisuals, Align, Context, Id, InnerResponse, PointerState, Pos2, Rect, Response,
-    Sense, TextStyle, Ui, Vec2,
-};
+use super::style::WidgetVisuals;
 use crate::{widgets::*, *};
-use epaint::mutex::RwLock;
-use std::sync::Arc;
+use alloc::{boxed::Box, rc::Rc};
+use core::cell::RefCell;
 
 /// What is saved between frames.
 #[derive(Clone, Default)]
@@ -55,7 +52,7 @@ impl BarState {
     }
 }
 
-impl std::ops::Deref for BarState {
+impl core::ops::Deref for BarState {
     type Target = MenuRootManager;
 
     fn deref(&self) -> &Self::Target {
@@ -63,7 +60,7 @@ impl std::ops::Deref for BarState {
     }
 }
 
-impl std::ops::DerefMut for BarState {
+impl core::ops::DerefMut for BarState {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.open_menu
     }
@@ -125,7 +122,7 @@ pub fn menu_image_button<R>(
 /// Returns `None` if the menu is not open.
 pub(crate) fn submenu_button<R>(
     ui: &mut Ui,
-    parent_state: Arc<RwLock<MenuState>>,
+    parent_state: Rc<RefCell<MenuState>>,
     title: impl Into<WidgetText>,
     add_contents: impl FnOnce(&mut Ui) -> R,
 ) -> InnerResponse<Option<R>> {
@@ -136,11 +133,11 @@ pub(crate) fn submenu_button<R>(
 pub(crate) fn menu_ui<'c, R>(
     ctx: &Context,
     menu_id: Id,
-    menu_state_arc: &Arc<RwLock<MenuState>>,
+    menu_state_arc: &Rc<RefCell<MenuState>>,
     add_contents: impl FnOnce(&mut Ui) -> R + 'c,
 ) -> InnerResponse<R> {
     let pos = {
-        let mut menu_state = menu_state_arc.write();
+        let mut menu_state = menu_state_arc.borrow_mut();
         menu_state.entry_count = 0;
         menu_state.rect.min
     };
@@ -165,7 +162,7 @@ pub(crate) fn menu_ui<'c, R>(
             .inner
     });
 
-    menu_state_arc.write().rect = area_response.response.rect;
+    menu_state_arc.borrow_mut().rect = area_response.response.rect;
 
     area_response
 }
@@ -271,7 +268,7 @@ impl MenuRootManager {
     }
 }
 
-impl std::ops::Deref for MenuRootManager {
+impl core::ops::Deref for MenuRootManager {
     type Target = Option<MenuRoot>;
 
     fn deref(&self) -> &Self::Target {
@@ -279,7 +276,7 @@ impl std::ops::Deref for MenuRootManager {
     }
 }
 
-impl std::ops::DerefMut for MenuRootManager {
+impl core::ops::DerefMut for MenuRootManager {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
@@ -288,14 +285,14 @@ impl std::ops::DerefMut for MenuRootManager {
 /// Menu root associated with an Id from a Response
 #[derive(Clone)]
 pub(crate) struct MenuRoot {
-    pub menu_state: Arc<RwLock<MenuState>>,
+    pub menu_state: Rc<RefCell<MenuState>>,
     pub id: Id,
 }
 
 impl MenuRoot {
     pub fn new(position: Pos2, id: Id) -> Self {
         Self {
-            menu_state: Arc::new(RwLock::new(MenuState::new(position))),
+            menu_state: Rc::new(RefCell::new(MenuState::new(position))),
             id,
         }
     }
@@ -308,7 +305,7 @@ impl MenuRoot {
         if self.id == button.id {
             let inner_response =
                 MenuState::show(&button.ctx, &self.menu_state, self.id, add_contents);
-            let menu_state = self.menu_state.read();
+            let menu_state = self.menu_state.borrow();
 
             if menu_state.response.is_close() {
                 return (MenuResponse::Close, Some(inner_response));
@@ -340,7 +337,7 @@ impl MenuRoot {
             pos.y += button.ctx.style().spacing.menu_spacing;
 
             if let Some(root) = root.inner.as_mut() {
-                let menu_rect = root.menu_state.read().rect;
+                let menu_rect = root.menu_state.borrow().rect;
                 let screen_rect = button.ctx.input(|i| i.screen_rect);
 
                 if pos.y + menu_rect.height() > screen_rect.max.y {
@@ -361,7 +358,7 @@ impl MenuRoot {
                 if let Some(root) = root.inner.as_mut() {
                     if root.id == id {
                         // pressed somewhere while this menu is open
-                        let in_menu = root.menu_state.read().area_contains(pos);
+                        let in_menu = root.menu_state.borrow().area_contains(pos);
                         if !in_menu {
                             return MenuResponse::Close;
                         }
@@ -384,7 +381,7 @@ impl MenuRoot {
                 let mut in_old_menu = false;
                 let mut destroy = false;
                 if let Some(root) = root {
-                    in_old_menu = root.menu_state.read().area_contains(pos);
+                    in_old_menu = root.menu_state.borrow().area_contains(pos);
                     destroy = !in_old_menu && pointer.any_pressed() && root.id == response.id;
                 }
                 if !in_old_menu {
@@ -523,12 +520,12 @@ impl SubMenuButton {
 
 pub struct SubMenu {
     button: SubMenuButton,
-    parent_state: Arc<RwLock<MenuState>>,
+    parent_state: Rc<RefCell<MenuState>>,
 }
 
 impl SubMenu {
-    fn new(parent_state: Arc<RwLock<MenuState>>, text: impl Into<WidgetText>) -> Self {
-        let index = parent_state.write().next_entry_index();
+    fn new(parent_state: Rc<RefCell<MenuState>>, text: impl Into<WidgetText>) -> Self {
+        let index = parent_state.borrow_mut().next_entry_index();
         Self {
             button: SubMenuButton::new(text, "⏵", index),
             parent_state,
@@ -541,13 +538,13 @@ impl SubMenu {
         add_contents: impl FnOnce(&mut Ui) -> R,
     ) -> InnerResponse<Option<R>> {
         let sub_id = ui.id().with(self.button.index);
-        let response = self.button.show(ui, &self.parent_state.read(), sub_id);
+        let response = self.button.show(ui, &self.parent_state.borrow(), sub_id);
         self.parent_state
-            .write()
+            .borrow_mut()
             .submenu_button_interaction(ui, sub_id, &response);
         let inner = self
             .parent_state
-            .write()
+            .borrow_mut()
             .show_submenu(ui.ctx(), sub_id, add_contents);
         InnerResponse::new(inner, response)
     }
@@ -555,7 +552,7 @@ impl SubMenu {
 
 pub(crate) struct MenuState {
     /// The opened sub-menu and its [`Id`]
-    sub_menu: Option<(Id, Arc<RwLock<MenuState>>)>,
+    sub_menu: Option<(Id, Rc<RefCell<MenuState>>)>,
 
     /// Bounding box of this menu (without the sub-menu),
     /// including the frame and everything.
@@ -585,7 +582,7 @@ impl MenuState {
 
     pub fn show<R>(
         ctx: &Context,
-        menu_state: &Arc<RwLock<Self>>,
+        menu_state: &Rc<RefCell<Self>>,
         id: Id,
         add_contents: impl FnOnce(&mut Ui) -> R,
     ) -> InnerResponse<R> {
@@ -600,7 +597,7 @@ impl MenuState {
     ) -> Option<R> {
         let (sub_response, response) = self.submenu(id).map(|sub| {
             let inner_response = Self::show(ctx, sub, id, add_contents);
-            (sub.read().response, inner_response.inner)
+            (sub.borrow().response, inner_response.inner)
         })?;
         self.cascade_close_response(sub_response);
         Some(response)
@@ -612,7 +609,7 @@ impl MenuState {
             || self
                 .sub_menu
                 .as_ref()
-                .map_or(false, |(_, sub)| sub.read().area_contains(pos))
+                .map_or(false, |(_, sub)| sub.borrow().area_contains(pos))
     }
 
     fn next_entry_index(&mut self) -> usize {
@@ -653,7 +650,7 @@ impl MenuState {
 
         if let Some(sub_menu) = self.current_submenu() {
             if let Some(pos) = pointer.hover_pos() {
-                let rect = sub_menu.read().rect;
+                let rect = sub_menu.borrow().rect;
                 return rect.intersects_ray(pos, pointer.velocity().normalized());
             }
         }
@@ -664,7 +661,7 @@ impl MenuState {
     fn hovering_current_submenu(&self, pointer: &PointerState) -> bool {
         if let Some(sub_menu) = self.current_submenu() {
             if let Some(pos) = pointer.hover_pos() {
-                return sub_menu.read().area_contains(pos);
+                return sub_menu.borrow().area_contains(pos);
             }
         }
         false
@@ -685,11 +682,11 @@ impl MenuState {
         self.sub_menu.as_ref().map(|(id, _)| *id)
     }
 
-    fn current_submenu(&self) -> Option<&Arc<RwLock<Self>>> {
+    fn current_submenu(&self) -> Option<&Rc<RefCell<Self>>> {
         self.sub_menu.as_ref().map(|(_, sub)| sub)
     }
 
-    fn submenu(&mut self, id: Id) -> Option<&Arc<RwLock<Self>>> {
+    fn submenu(&mut self, id: Id) -> Option<&Rc<RefCell<Self>>> {
         self.sub_menu
             .as_ref()
             .and_then(|(k, sub)| if id == *k { Some(sub) } else { None })
@@ -698,7 +695,7 @@ impl MenuState {
     /// Open submenu at position, if not already open.
     fn open_submenu(&mut self, id: Id, pos: Pos2) {
         if !self.is_open(id) {
-            self.sub_menu = Some((id, Arc::new(RwLock::new(Self::new(pos)))));
+            self.sub_menu = Some((id, Rc::new(RefCell::new(Self::new(pos)))));
         }
     }
 

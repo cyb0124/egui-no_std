@@ -1,8 +1,7 @@
-use crate::*;
-
 use self::layers::ShapeIdx;
-
 use super::CursorRange;
+use crate::*;
+use alloc::vec::Vec;
 
 pub fn paint_text_selection(
     painter: &Painter,
@@ -100,7 +99,7 @@ pub fn paint_text_cursor(
         };
 
         ui.ctx()
-            .request_repaint_after(std::time::Duration::from_secs_f32(wake_in));
+            .request_repaint_after(core::time::Duration::from_secs_f32(wake_in));
     } else {
         paint_cursor_end(painter, ui.visuals(), primary_cursor_rect);
     }

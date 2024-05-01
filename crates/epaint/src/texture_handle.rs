@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use alloc::{borrow::ToOwned, rc::Rc, string::String};
+use core::cell::RefCell;
 
 use crate::{
-    emath::NumExt, mutex::RwLock, textures::TextureOptions, ImageData, ImageDelta, TextureId,
-    TextureManager,
+    emath::NumExt, textures::TextureOptions, ImageData, ImageDelta, TextureId, TextureManager,
 };
 
 /// Used to paint images.
@@ -18,19 +18,19 @@ use crate::{
 /// See also [`TextureManager`].
 #[must_use]
 pub struct TextureHandle {
-    tex_mngr: Arc<RwLock<TextureManager>>,
+    tex_mngr: Rc<RefCell<TextureManager>>,
     id: TextureId,
 }
 
 impl Drop for TextureHandle {
     fn drop(&mut self) {
-        self.tex_mngr.write().free(self.id);
+        self.tex_mngr.borrow_mut().free(self.id);
     }
 }
 
 impl Clone for TextureHandle {
     fn clone(&self) -> Self {
-        self.tex_mngr.write().retain(self.id);
+        self.tex_mngr.borrow_mut().retain(self.id);
         Self {
             tex_mngr: self.tex_mngr.clone(),
             id: self.id,
@@ -47,16 +47,16 @@ impl PartialEq for TextureHandle {
 
 impl Eq for TextureHandle {}
 
-impl std::hash::Hash for TextureHandle {
+impl core::hash::Hash for TextureHandle {
     #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
     }
 }
 
 impl TextureHandle {
     /// If you are using egui, use `egui::Context::load_texture` instead.
-    pub fn new(tex_mngr: Arc<RwLock<TextureManager>>, id: TextureId) -> Self {
+    pub fn new(tex_mngr: Rc<RefCell<TextureManager>>, id: TextureId) -> Self {
         Self { tex_mngr, id }
     }
 
@@ -68,7 +68,7 @@ impl TextureHandle {
     /// Assign a new image to an existing texture.
     pub fn set(&mut self, image: impl Into<ImageData>, options: TextureOptions) {
         self.tex_mngr
-            .write()
+            .borrow_mut()
             .set(self.id, ImageDelta::full(image.into(), options));
     }
 
@@ -80,14 +80,14 @@ impl TextureHandle {
         options: TextureOptions,
     ) {
         self.tex_mngr
-            .write()
+            .borrow_mut()
             .set(self.id, ImageDelta::partial(pos, image.into(), options));
     }
 
     /// width x height
     pub fn size(&self) -> [usize; 2] {
         self.tex_mngr
-            .read()
+            .borrow()
             .meta(self.id)
             .map_or([0, 0], |tex| tex.size)
     }
@@ -101,7 +101,7 @@ impl TextureHandle {
     /// `width x height x bytes_per_pixel`
     pub fn byte_size(&self) -> usize {
         self.tex_mngr
-            .read()
+            .borrow()
             .meta(self.id)
             .map_or(0, |tex| tex.bytes_used())
     }
@@ -115,7 +115,7 @@ impl TextureHandle {
     /// Debug-name.
     pub fn name(&self) -> String {
         self.tex_mngr
-            .read()
+            .borrow()
             .meta(self.id)
             .map_or_else(|| "<none>".to_owned(), |tex| tex.name.clone())
     }

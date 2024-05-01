@@ -15,8 +15,8 @@ pub struct Sense {
     pub focusable: bool,
 }
 
-impl std::fmt::Debug for Sense {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for Sense {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         let Self {
             click,
             drag,
@@ -115,7 +115,7 @@ impl Sense {
     }
 }
 
-impl std::ops::BitOr for Sense {
+impl core::ops::BitOr for Sense {
     type Output = Self;
 
     #[inline]
@@ -124,7 +124,7 @@ impl std::ops::BitOr for Sense {
     }
 }
 
-impl std::ops::BitOrAssign for Sense {
+impl core::ops::BitOrAssign for Sense {
     #[inline]
     fn bitor_assign(&mut self, rhs: Self) {
         *self = self.union(rhs);

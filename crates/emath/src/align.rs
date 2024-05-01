@@ -246,7 +246,7 @@ impl Align2 {
     }
 }
 
-impl std::ops::Index<usize> for Align2 {
+impl core::ops::Index<usize> for Align2 {
     type Output = Align;
 
     #[inline(always)]
@@ -255,7 +255,7 @@ impl std::ops::Index<usize> for Align2 {
     }
 }
 
-impl std::ops::IndexMut<usize> for Align2 {
+impl core::ops::IndexMut<usize> for Align2 {
     #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut Align {
         &mut self.0[index]

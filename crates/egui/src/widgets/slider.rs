@@ -1,8 +1,10 @@
 #![allow(clippy::needless_pass_by_value)] // False positives with `impl ToString`
 
-use std::ops::RangeInclusive;
-
 use crate::{style::HandleShape, *};
+use alloc::string::ToString;
+use alloc::{boxed::Box, format, string::String};
+use core::ops::RangeInclusive;
+use num_traits::Float;
 
 // ----------------------------------------------------------------------------
 
@@ -634,15 +636,6 @@ impl<'a> Slider<'a> {
             });
         }
 
-        #[cfg(feature = "accesskit")]
-        {
-            use accesskit::Action;
-            ui.input(|input| {
-                decrement += input.num_accesskit_action_requests(response.id, Action::Decrement);
-                increment += input.num_accesskit_action_requests(response.id, Action::Increment);
-            });
-        }
-
         let kb_step = increment as f32 - decrement as f32;
 
         if kb_step != 0.0 {
@@ -662,18 +655,6 @@ impl<'a> Slider<'a> {
                 _ => self.value_from_position(new_position, position_range),
             };
             self.set_value(new_value);
-        }
-
-        #[cfg(feature = "accesskit")]
-        {
-            use accesskit::{Action, ActionData};
-            ui.input(|input| {
-                for request in input.accesskit_action_requests(response.id, Action::SetValue) {
-                    if let Some(ActionData::NumericValue(new_value)) = request.data {
-                        self.set_value(new_value);
-                    }
-                }
-            });
         }
 
         // Paint it:
@@ -861,24 +842,6 @@ impl<'a> Slider<'a> {
         response.changed = value != old_value;
         response.widget_info(|| WidgetInfo::slider(value, self.text.text()));
 
-        #[cfg(feature = "accesskit")]
-        ui.ctx().accesskit_node_builder(response.id, |builder| {
-            use accesskit::Action;
-            builder.set_min_numeric_value(*self.range.start());
-            builder.set_max_numeric_value(*self.range.end());
-            if let Some(step) = self.step {
-                builder.set_numeric_value_step(step);
-            }
-            builder.add_action(Action::SetValue);
-            let clamp_range = self.clamp_range();
-            if value < *clamp_range.end() {
-                builder.add_action(Action::Increment);
-            }
-            if value > *clamp_range.start() {
-                builder.add_action(Action::Decrement);
-            }
-        });
-
         let slider_response = response.clone();
 
         let value_response = if self.show_value {
@@ -936,7 +899,7 @@ impl<'a> Widget for Slider<'a> {
 // Logarithmic sliders are allowed to include zero and infinity,
 // even though mathematically it doesn't make sense.
 
-use std::f64::INFINITY;
+use core::f64::INFINITY;
 
 /// When the user asks for an infinitely large range (e.g. logarithmic from zero),
 /// give a scale that this many orders of magnitude in size.

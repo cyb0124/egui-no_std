@@ -1,6 +1,7 @@
 //! Show popup windows, tooltips, context menus etc.
 
 use crate::*;
+use alloc::boxed::Box;
 
 // ----------------------------------------------------------------------------
 
@@ -8,7 +9,7 @@ use crate::*;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TooltipState {
     last_common_id: Option<Id>,
-    individual_ids_and_sizes: ahash::HashMap<usize, (Id, Vec2)>,
+    individual_ids_and_sizes: hashbrown::HashMap<usize, (Id, Vec2)>,
 }
 
 impl TooltipState {

@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use alloc::{collections::VecDeque, vec::Vec};
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -67,8 +67,8 @@ pub struct Undoer<State> {
     flux: Option<Flux<State>>,
 }
 
-impl<State> std::fmt::Debug for Undoer<State> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<State> alloc::fmt::Debug for Undoer<State> {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         let Self { undos, redos, .. } = self;
         f.debug_struct("Undoer")
             .field("undo count", &undos.len())

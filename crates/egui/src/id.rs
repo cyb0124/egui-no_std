@@ -1,6 +1,8 @@
 // TODO(emilk): have separate types `PositionId` and `UniqueId`. ?
 
-use std::num::NonZeroU64;
+use core::num::NonZeroU64;
+
+use alloc::{format, string::String};
 
 /// egui tracks widgets frame-to-frame using [`Id`]s.
 ///
@@ -51,14 +53,14 @@ impl Id {
     }
 
     /// Generate a new [`Id`] by hashing some source (e.g. a string or integer).
-    pub fn new(source: impl std::hash::Hash) -> Self {
-        Self::from_hash(epaint::ahash::RandomState::with_seeds(1, 2, 3, 4).hash_one(source))
+    pub fn new(source: impl core::hash::Hash) -> Self {
+        Self::from_hash(ahash::RandomState::with_seeds(1, 2, 3, 4).hash_one(source))
     }
 
     /// Generate a new [`Id`] by hashing the parent [`Id`] and the given argument.
-    pub fn with(self, child: impl std::hash::Hash) -> Self {
-        use std::hash::{BuildHasher, Hasher};
-        let mut hasher = epaint::ahash::RandomState::with_seeds(1, 2, 3, 4).build_hasher();
+    pub fn with(self, child: impl core::hash::Hash) -> Self {
+        use core::hash::{BuildHasher, Hasher};
+        let mut hasher = ahash::RandomState::with_seeds(1, 2, 3, 4).build_hasher();
         hasher.write_u64(self.0.get());
         child.hash(&mut hasher);
         Self::from_hash(hasher.finish())
@@ -76,15 +78,10 @@ impl Id {
     pub fn value(&self) -> u64 {
         self.0.get()
     }
-
-    #[cfg(feature = "accesskit")]
-    pub(crate) fn accesskit_id(&self) -> accesskit::NodeId {
-        self.value().into()
-    }
 }
 
-impl std::fmt::Debug for Id {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Debug for Id {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         write!(f, "{:04X}", self.value() as u16)
     }
 }
@@ -106,8 +103,8 @@ impl From<String> for Id {
 
 #[test]
 fn id_size() {
-    assert_eq!(std::mem::size_of::<Id>(), 8);
-    assert_eq!(std::mem::size_of::<Option<Id>>(), 8);
+    assert_eq!(core::mem::size_of::<Id>(), 8);
+    assert_eq!(core::mem::size_of::<Option<Id>>(), 8);
 }
 
 // ----------------------------------------------------------------------------
@@ -116,7 +113,7 @@ fn id_size() {
 #[derive(Default)]
 pub struct IdHasher(u64);
 
-impl std::hash::Hasher for IdHasher {
+impl core::hash::Hasher for IdHasher {
     fn write(&mut self, _: &[u8]) {
         unreachable!("Invalid use of IdHasher");
     }
@@ -172,7 +169,7 @@ impl std::hash::Hasher for IdHasher {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct BuildIdHasher {}
 
-impl std::hash::BuildHasher for BuildIdHasher {
+impl core::hash::BuildHasher for BuildIdHasher {
     type Hasher = IdHasher;
 
     #[inline(always)]
@@ -182,7 +179,7 @@ impl std::hash::BuildHasher for BuildIdHasher {
 }
 
 /// `IdSet` is a `HashSet<Id>` optimized by knowing that [`Id`] has good entropy, and doesn't need more hashing.
-pub type IdSet = std::collections::HashSet<Id, BuildIdHasher>;
+pub type IdSet = hashbrown::HashSet<Id, BuildIdHasher>;
 
 /// `IdMap<V>` is a `HashMap<Id, V>` optimized by knowing that [`Id`] has good entropy, and doesn't need more hashing.
-pub type IdMap<V> = std::collections::HashMap<Id, V, BuildIdHasher>;
+pub type IdMap<V> = hashbrown::HashMap<Id, V, BuildIdHasher>;

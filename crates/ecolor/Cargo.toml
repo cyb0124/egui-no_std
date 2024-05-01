@@ -34,6 +34,8 @@ extra_debug_asserts = []
 extra_asserts = []
 
 [dependencies]
+num-traits.workspace = true
+
 #! ### Optional dependencies
 
 ## [`bytemuck`](https://docs.rs/bytemuck) enables you to cast `ecolor` types to `&[u8]`.

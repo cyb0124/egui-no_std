@@ -1,12 +1,11 @@
-use std::borrow::Cow;
-
-use emath::{Float as _, Rot2};
-use epaint::RectShape;
-
 use crate::{
-    load::{Bytes, SizeHint, SizedTexture, TextureLoadResult, TexturePoll},
+    load::{Bytes, SizedTexture, TextureLoadResult, TexturePoll},
     *,
 };
+use alloc::{borrow::Cow, format, string::String};
+use emath::{Float as _, Rot2};
+use epaint::RectShape;
+use num_traits::Float;
 
 /// A widget which displays an image.
 ///
@@ -520,8 +519,8 @@ pub enum ImageSource<'a> {
     },
 }
 
-impl<'a> std::fmt::Debug for ImageSource<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl<'a> alloc::fmt::Debug for ImageSource<'a> {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             ImageSource::Bytes { uri, .. } | ImageSource::Uri(uri) => uri.as_ref().fmt(f),
             ImageSource::Texture(st) => st.id.fmt(f),

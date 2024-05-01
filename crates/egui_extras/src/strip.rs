@@ -3,6 +3,7 @@ use crate::{
     sizing::Sizing,
     Size,
 };
+use alloc::vec::Vec;
 use egui::{Response, Ui};
 
 /// Builder for creating a new [`Strip`].

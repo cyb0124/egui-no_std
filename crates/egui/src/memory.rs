@@ -1,12 +1,13 @@
 #![warn(missing_docs)] // Let's keep this file well-documented.` to memory.rs
 
-use ahash::HashMap;
-use epaint::emath::TSTransform;
-
 use crate::{
     area, vec2, EventFilter, Id, IdMap, LayerId, Order, Pos2, Rangef, RawInput, Rect, Style, Vec2,
     ViewportId, ViewportIdMap, ViewportIdSet,
 };
+use alloc::{rc::Rc, vec::Vec};
+use epaint::emath::TSTransform;
+use hashbrown::HashMap;
+use num_traits::Float;
 
 // ----------------------------------------------------------------------------
 
@@ -167,7 +168,7 @@ impl FocusDirection {
 pub struct Options {
     /// The default style for new [`Ui`](crate::Ui):s.
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub(crate) style: std::sync::Arc<Style>,
+    pub(crate) style: Rc<Style>,
 
     /// Global zoom factor of the UI.
     ///
@@ -280,7 +281,7 @@ impl Options {
         CollapsingHeader::new("🎑 Style")
             .default_open(true)
             .show(ui, |ui| {
-                std::sync::Arc::make_mut(style).ui(ui);
+                Rc::make_mut(style).ui(ui);
             });
 
         CollapsingHeader::new("✒ Painting")
@@ -334,9 +335,6 @@ pub(crate) struct Focus {
     /// Give focus to this widget next frame
     id_next_frame: Option<Id>,
 
-    #[cfg(feature = "accesskit")]
-    id_requested_by_accesskit: Option<accesskit::NodeId>,
-
     /// If set, the next widget that is interested in focus will automatically get it.
     /// Probably because the user pressed Tab.
     give_to_next: bool,
@@ -386,12 +384,6 @@ impl Focus {
             self.focused_widget = Some(FocusWidget::new(id));
         }
         let event_filter = self.focused_widget.map(|w| w.filter).unwrap_or_default();
-
-        #[cfg(feature = "accesskit")]
-        {
-            self.id_requested_by_accesskit = None;
-        }
-
         self.focus_direction = FocusDirection::None;
 
         for event in &new_input.events {
@@ -426,18 +418,6 @@ impl Focus {
                     }
                 }
             }
-
-            #[cfg(feature = "accesskit")]
-            {
-                if let crate::Event::AccessKitActionRequest(accesskit::ActionRequest {
-                    action: accesskit::Action::Focus,
-                    target,
-                    data: None,
-                }) = event
-                {
-                    self.id_requested_by_accesskit = Some(*target);
-                }
-            }
         }
     }
 
@@ -464,16 +444,6 @@ impl Focus {
     }
 
     fn interested_in_focus(&mut self, id: Id) {
-        #[cfg(feature = "accesskit")]
-        {
-            if self.id_requested_by_accesskit == Some(id.accesskit_id()) {
-                self.focused_widget = Some(FocusWidget::new(id));
-                self.id_requested_by_accesskit = None;
-                self.give_to_next = false;
-                self.reset_focus();
-            }
-        }
-
         // The rect is updated at the end of the frame.
         self.focus_widgets_cache
             .entry(id)
@@ -554,7 +524,7 @@ impl Focus {
 
         let current_rect = self.focus_widgets_cache.get(&current_focused.id)?;
 
-        let mut best_score = std::f32::INFINITY;
+        let mut best_score = core::f32::INFINITY;
         let mut best_id = None;
 
         for (candidate_id, candidate_rect) in &self.focus_widgets_cache {
@@ -592,8 +562,6 @@ impl Focus {
 
 impl Memory {
     pub(crate) fn begin_frame(&mut self, new_raw_input: &RawInput, viewports: &ViewportIdSet) {
-        crate::profile_function!();
-
         self.viewport_id = new_raw_input.viewport_id;
 
         // Cleanup
@@ -878,15 +846,15 @@ pub struct Areas {
     /// Back-to-front. Top is last.
     order: Vec<LayerId>,
 
-    visible_last_frame: ahash::HashSet<LayerId>,
-    visible_current_frame: ahash::HashSet<LayerId>,
+    visible_last_frame: hashbrown::HashSet<LayerId>,
+    visible_current_frame: hashbrown::HashSet<LayerId>,
 
     /// When an area want to be on top, it is put in here.
     /// At the end of the frame, this is used to reorder the layers.
     /// This means if several layers want to be on top, they will keep their relative order.
     /// So if you close three windows and then reopen them all in one frame,
     /// they will all be sent to the top, but keep their previous internal order.
-    wants_to_be_on_top: ahash::HashSet<LayerId>,
+    wants_to_be_on_top: hashbrown::HashSet<LayerId>,
 }
 
 impl Areas {
@@ -953,7 +921,7 @@ impl Areas {
         self.visible_last_frame.contains(layer_id) || self.visible_current_frame.contains(layer_id)
     }
 
-    pub fn visible_layer_ids(&self) -> ahash::HashSet<LayerId> {
+    pub fn visible_layer_ids(&self) -> hashbrown::HashSet<LayerId> {
         self.visible_last_frame
             .iter()
             .copied()
@@ -995,17 +963,9 @@ impl Areas {
             ..
         } = self;
 
-        std::mem::swap(visible_last_frame, visible_current_frame);
+        core::mem::swap(visible_last_frame, visible_current_frame);
         visible_current_frame.clear();
         order.sort_by_key(|layer| (layer.order, wants_to_be_on_top.contains(layer)));
         wants_to_be_on_top.clear();
     }
-}
-
-// ----------------------------------------------------------------------------
-
-#[test]
-fn memory_impl_send_sync() {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<Memory>();
 }

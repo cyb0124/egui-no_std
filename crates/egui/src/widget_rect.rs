@@ -1,4 +1,5 @@
-use ahash::HashMap;
+use alloc::vec::Vec;
+use hashbrown::HashMap;
 
 use crate::*;
 
@@ -128,13 +129,13 @@ impl WidgetRects {
         let layer_widgets = by_layer.entry(layer_id).or_default();
 
         match by_id.entry(widget_rect.id) {
-            std::collections::hash_map::Entry::Vacant(entry) => {
+            hashbrown::hash_map::Entry::Vacant(entry) => {
                 // A new widget
                 let idx_in_layer = layer_widgets.len();
                 entry.insert((idx_in_layer, widget_rect));
                 layer_widgets.push(widget_rect);
             }
-            std::collections::hash_map::Entry::Occupied(mut entry) => {
+            hashbrown::hash_map::Entry::Occupied(mut entry) => {
                 // This is a known widget, but we might need to update it!
                 // e.g. calling `response.interact(…)` to add more interaction.
                 let (idx_in_layer, existing) = entry.get_mut();

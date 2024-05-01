@@ -1,8 +1,9 @@
 //! Handles paint layers, i.e. how things
 //! are sometimes painted behind or in front of other things.
 
-use crate::{Id, *};
-use epaint::{emath::TSTransform, ClippedShape, Shape};
+use crate::*;
+use alloc::{format, string::String, vec::Vec};
+use epaint::{emath::TSTransform, ClippedShape};
 
 /// Different layer categories
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq, Ord, PartialOrd)]
@@ -197,10 +198,8 @@ impl GraphicLayers {
     pub fn drain(
         &mut self,
         area_order: &[LayerId],
-        transforms: &ahash::HashMap<LayerId, TSTransform>,
+        transforms: &hashbrown::HashMap<LayerId, TSTransform>,
     ) -> Vec<ClippedShape> {
-        crate::profile_function!();
-
         let mut all_shapes: Vec<_> = Default::default();
 
         for &order in &Order::ALL {

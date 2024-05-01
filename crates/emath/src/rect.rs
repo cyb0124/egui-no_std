@@ -1,5 +1,5 @@
-use std::f32::INFINITY;
-use std::fmt;
+use core::f32::INFINITY;
+use core::fmt;
 
 use crate::*;
 

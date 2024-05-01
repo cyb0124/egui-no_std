@@ -1,4 +1,5 @@
-use std::{any::Any, sync::Arc};
+use alloc::{format, rc::Rc};
+use core::any::Any;
 
 use crate::{
     emath::{Align, Pos2, Rect, Vec2},
@@ -405,7 +406,7 @@ impl Response {
 
     /// If the user started dragging this widget this frame, store the payload for drag-and-drop.
     #[doc(alias = "drag and drop")]
-    pub fn dnd_set_drag_payload<Payload: Any + Send + Sync>(&self, payload: Payload) {
+    pub fn dnd_set_drag_payload<Payload: Any>(&self, payload: Payload) {
         if self.drag_started() {
             crate::DragAndDrop::set_payload(&self.ctx, payload);
         }
@@ -422,7 +423,7 @@ impl Response {
     /// Only returns something if [`Self::contains_pointer`] is true,
     /// and the user is drag-dropping something of this type.
     #[doc(alias = "drag and drop")]
-    pub fn dnd_hover_payload<Payload: Any + Send + Sync>(&self) -> Option<Arc<Payload>> {
+    pub fn dnd_hover_payload<Payload: Any>(&self) -> Option<Rc<Payload>> {
         // NOTE: we use `response.contains_pointer` here instead of `hovered`, because
         // `hovered` is always false when another widget is being dragged.
         if self.contains_pointer() {
@@ -438,7 +439,7 @@ impl Response {
     /// the user is drag-dropping something of this type,
     /// and they released it this frame
     #[doc(alias = "drag and drop")]
-    pub fn dnd_release_payload<Payload: Any + Send + Sync>(&self) -> Option<Arc<Payload>> {
+    pub fn dnd_release_payload<Payload: Any>(&self) -> Option<Rc<Payload>> {
         // NOTE: we use `response.contains_pointer` here instead of `hovered`, because
         // `hovered` is always false when another widget is being dragged.
         if self.contains_pointer() && self.ctx.input(|i| i.pointer.any_released()) {
@@ -596,7 +597,7 @@ impl Response {
 
             if 0.0 < time_til_tooltip {
                 // Wait until the mouse has been still for a while
-                if let Ok(duration) = std::time::Duration::try_from_secs_f32(time_til_tooltip) {
+                if let Ok(duration) = core::time::Duration::try_from_secs_f32(time_til_tooltip) {
                     self.ctx.request_repaint_after(duration);
                 }
                 return false;
@@ -763,89 +764,15 @@ impl Response {
         if let Some(event) = event {
             self.output_event(event);
         } else {
-            #[cfg(feature = "accesskit")]
-            self.ctx.accesskit_node_builder(self.id, |builder| {
-                self.fill_accesskit_node_from_widget_info(builder, make_info());
-            });
-
             self.ctx.register_widget_info(self.id, make_info);
         }
     }
 
     pub fn output_event(&self, event: crate::output::OutputEvent) {
-        #[cfg(feature = "accesskit")]
-        self.ctx.accesskit_node_builder(self.id, |builder| {
-            self.fill_accesskit_node_from_widget_info(builder, event.widget_info().clone());
-        });
-
         self.ctx
             .register_widget_info(self.id, || event.widget_info().clone());
 
         self.ctx.output_mut(|o| o.events.push(event));
-    }
-
-    #[cfg(feature = "accesskit")]
-    pub(crate) fn fill_accesskit_node_common(&self, builder: &mut accesskit::NodeBuilder) {
-        builder.set_bounds(accesskit::Rect {
-            x0: self.rect.min.x.into(),
-            y0: self.rect.min.y.into(),
-            x1: self.rect.max.x.into(),
-            y1: self.rect.max.y.into(),
-        });
-        if self.sense.focusable {
-            builder.add_action(accesskit::Action::Focus);
-        }
-        if self.sense.click && builder.default_action_verb().is_none() {
-            builder.set_default_action_verb(accesskit::DefaultActionVerb::Click);
-        }
-    }
-
-    #[cfg(feature = "accesskit")]
-    fn fill_accesskit_node_from_widget_info(
-        &self,
-        builder: &mut accesskit::NodeBuilder,
-        info: crate::WidgetInfo,
-    ) {
-        use crate::WidgetType;
-        use accesskit::{Checked, Role};
-
-        self.fill_accesskit_node_common(builder);
-        builder.set_role(match info.typ {
-            WidgetType::Label => Role::StaticText,
-            WidgetType::Link => Role::Link,
-            WidgetType::TextEdit => Role::TextInput,
-            WidgetType::Button | WidgetType::ImageButton | WidgetType::CollapsingHeader => {
-                Role::Button
-            }
-            WidgetType::Checkbox => Role::CheckBox,
-            WidgetType::RadioButton => Role::RadioButton,
-            WidgetType::SelectableLabel => Role::ToggleButton,
-            WidgetType::ComboBox => Role::ComboBox,
-            WidgetType::Slider => Role::Slider,
-            WidgetType::DragValue => Role::SpinButton,
-            WidgetType::ColorButton => Role::ColorWell,
-            WidgetType::ProgressIndicator => Role::ProgressIndicator,
-            WidgetType::Other => Role::Unknown,
-        });
-        if let Some(label) = info.label {
-            builder.set_name(label);
-        }
-        if let Some(value) = info.current_text_value {
-            builder.set_value(value);
-        }
-        if let Some(value) = info.value {
-            builder.set_numeric_value(value);
-        }
-        if let Some(selected) = info.selected {
-            builder.set_checked(if selected {
-                Checked::True
-            } else {
-                Checked::False
-            });
-        } else if matches!(info.typ, WidgetType::Checkbox) {
-            // Indeterminate state
-            builder.set_checked(Checked::Mixed);
-        }
     }
 
     /// Associate a label with a control for accessibility.
@@ -861,16 +788,7 @@ impl Response {
     /// });
     /// # });
     /// ```
-    pub fn labelled_by(self, id: Id) -> Self {
-        #[cfg(feature = "accesskit")]
-        self.ctx.accesskit_node_builder(self.id, |builder| {
-            builder.push_labelled_by(id.accesskit_id());
-        });
-        #[cfg(not(feature = "accesskit"))]
-        {
-            let _ = id;
-        }
-
+    pub fn labelled_by(self, _: Id) -> Self {
         self
     }
 
@@ -985,7 +903,7 @@ impl Response {
 /// ```
 ///
 /// Now `draw_vec2(ui, foo).hovered` is true if either [`DragValue`](crate::DragValue) were hovered.
-impl std::ops::BitOr for Response {
+impl core::ops::BitOr for Response {
     type Output = Self;
 
     fn bitor(self, rhs: Self) -> Self {
@@ -1006,7 +924,7 @@ impl std::ops::BitOr for Response {
 /// if response.hovered() { ui.label("You hovered at least one of the widgets"); }
 /// # });
 /// ```
-impl std::ops::BitOrAssign for Response {
+impl core::ops::BitOrAssign for Response {
     fn bitor_assign(&mut self, rhs: Self) {
         *self = self.union(rhs);
     }

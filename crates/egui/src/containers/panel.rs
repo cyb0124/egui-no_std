@@ -16,6 +16,8 @@
 //! Add your [`Window`]:s after any top-level panels.
 
 use crate::*;
+use alloc::boxed::Box;
+use num_traits::Float;
 
 /// State regarding panels.
 #[derive(Clone, Copy, Debug)]

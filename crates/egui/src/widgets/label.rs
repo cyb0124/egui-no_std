@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
-use crate::*;
-
 use self::text_selection::LabelSelectionState;
+use crate::*;
+use alloc::rc::Rc;
 
 /// Static text.
 ///
@@ -109,7 +107,7 @@ impl Label {
 
 impl Label {
     /// Do layout and position the galley in the ui, without painting it or adding widget info.
-    pub fn layout_in_ui(self, ui: &mut Ui) -> (Pos2, Arc<Galley>, Response) {
+    pub fn layout_in_ui(self, ui: &mut Ui) -> (Pos2, Rc<Galley>, Response) {
         let selectable = self
             .selectable
             .unwrap_or_else(|| ui.style().interaction.selectable_labels);

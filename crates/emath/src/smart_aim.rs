@@ -1,5 +1,7 @@
 //! Find "simple" numbers is some range. Used by sliders.
 
+use num_traits::Float;
+
 const NUM_DECIMALS: usize = 15;
 
 /// Find the "simplest" number in a closed range [min, max], i.e. the one with the fewest decimal digits.
@@ -141,7 +143,7 @@ fn test_aim() {
     assert_eq!(best_in_range_f64(99.999, 100.000), 100.0);
     assert_eq!(best_in_range_f64(10.001, 100.001), 100.0);
 
-    use std::f64::{INFINITY, NAN, NEG_INFINITY};
+    use core::f64::{INFINITY, NAN, NEG_INFINITY};
     assert!(best_in_range_f64(NAN, NAN).is_nan());
     assert_eq!(best_in_range_f64(NAN, 1.2), 1.2);
     assert_eq!(best_in_range_f64(NAN, INFINITY), INFINITY);

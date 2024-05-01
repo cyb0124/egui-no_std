@@ -1,7 +1,7 @@
-use std::fmt;
-use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-
 use crate::Vec2b;
+use alloc::fmt;
+use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use num_traits::Float;
 
 /// A vector has a direction and length.
 /// A [`Vec2`] is often used to represent a size.
@@ -308,7 +308,7 @@ impl Vec2 {
     }
 }
 
-impl std::ops::Index<usize> for Vec2 {
+impl core::ops::Index<usize> for Vec2 {
     type Output = f32;
 
     #[inline(always)]
@@ -321,7 +321,7 @@ impl std::ops::Index<usize> for Vec2 {
     }
 }
 
-impl std::ops::IndexMut<usize> for Vec2 {
+impl core::ops::IndexMut<usize> for Vec2 {
     #[inline(always)]
     fn index_mut(&mut self, index: usize) -> &mut f32 {
         match index {
@@ -491,7 +491,7 @@ fn test_vec2() {
             assert!((left - right).abs() < 1e-6, "{} != {}", left, right);
         };
     }
-    use std::f32::consts::TAU;
+    use core::f32::consts::TAU;
 
     assert_eq!(Vec2::ZERO.angle(), 0.0);
     assert_eq!(Vec2::angled(0.0).angle(), 0.0);

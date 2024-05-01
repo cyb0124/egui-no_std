@@ -15,7 +15,7 @@ use crate::{gamma_u8_from_linear_f32, linear_f32_from_gamma_u8, linear_f32_from_
 #[cfg_attr(feature = "bytemuck", derive(bytemuck::Pod, bytemuck::Zeroable))]
 pub struct Color32(pub(crate) [u8; 4]);
 
-impl std::ops::Index<usize> for Color32 {
+impl core::ops::Index<usize> for Color32 {
     type Output = u8;
 
     #[inline]
@@ -24,7 +24,7 @@ impl std::ops::Index<usize> for Color32 {
     }
 }
 
-impl std::ops::IndexMut<usize> for Color32 {
+impl core::ops::IndexMut<usize> for Color32 {
     #[inline]
     fn index_mut(&mut self, index: usize) -> &mut u8 {
         &mut self.0[index]
