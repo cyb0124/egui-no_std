@@ -4,7 +4,6 @@ version.workspace = true
 authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
 description = "Minimal 2D math library for GUI work"
 edition.workspace = true
-rust-version.workspace = true
 homepage = "https://github.com/emilk/egui/tree/master/crates/emath"
 license.workspace = true
 readme = "README.md"

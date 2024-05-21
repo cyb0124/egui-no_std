@@ -7,7 +7,6 @@ authors = [
 ]
 description = "Color structs and color conversion utilities"
 edition.workspace = true
-rust-version.workspace = true
 homepage = "https://github.com/emilk/egui"
 license.workspace = true
 readme = "README.md"

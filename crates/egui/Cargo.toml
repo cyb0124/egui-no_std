@@ -4,7 +4,6 @@ version.workspace = true
 authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
 description = "An easy-to-use immediate mode GUI that runs on both web and native"
 edition.workspace = true
-rust-version.workspace = true
 homepage = "https://github.com/emilk/egui"
 license.workspace = true
 readme = "../../README.md"
